@@ -10,11 +10,12 @@ open MeasureTheory ProbabilityTheory Measure
 set_option quotPrecheck false
 notation "π" => Real.pi
 
-/- Probability theory variables. -/
-variable {Ω : Type*} [MeasureSpace Ω] [IsProbabilityMeasure (ℙ : Measure Ω)]
-
-/- Buffon's needle variables. -/
 variable
+  /- Probability theory variables. -/
+  {Ω : Type*} [MeasureSpace Ω] [IsProbabilityMeasure (ℙ : Measure Ω)]
+
+  /- Buffon's needle variables. -/
+
   /-
     - `d > 0` is the distance between parallel lines.
     - `l > 0` is the length of the needle.
@@ -45,9 +46,11 @@ noncomputable def N : (ℝ × ℝ) → ℝ := fun ⟨x, θ⟩ => by
 /- Lemmas that are not specific to Buffon's needle. -/
 section general_lemmas
 
-lemma indicator_const (c : ℝ) :
-  Set.indicator s (fun x => c) x =
-  c * (Set.indicator s 1 x) := by sorry
+lemma indicator_const (c : ℝ) : Set.indicator s (fun _ => c) x = c * (Set.indicator s 1 x) := by
+  simp_rw [Set.indicator]
+  by_cases h : x ∈ s
+  · simp_rw [if_pos h, Pi.one_apply, mul_one]
+  · simp_rw [if_neg h, mul_zero]
 
 lemma indicator_prod_left {α β γ : Type _} [Zero γ] {s₁ : Set α} {s₂ : Set β} {f : α × β → γ} {a : α} {b : β} :
   Set.indicator (s₁ ×ˢ s₂) f (a, b) = Set.indicator s₁ (fun a => Set.indicator s₂ (fun b => f ⟨a, b⟩) b) a := by
@@ -84,9 +87,7 @@ lemma integral_prod_eq_set_integrals {s₁ : Set ℝ} {s₂ : Set ℝ} {f : ℝ 
     Set.indicator s₁ (fun _ => Set.indicator s₂ (fun _ => f (x, y)) y) x =
     Set.indicator s₁ (fun x => Set.indicator s₂ (fun y => f (x, y)) y) x := by rfl
 
-  simp_rw [smul_eq_mul, one_mul]
-  conv in (Set.indicator _ _ _) => rw [this]
-  simp_rw [integral_indicator hs₁]
+  simp_rw [smul_eq_mul, one_mul, this, integral_indicator hs₁]
 
   have (x y : ℝ) : Set.indicator s₂ (fun y => f (x, y)) y =
     Set.indicator s₂ (fun _ => f (x, y)) y := by rfl
@@ -97,10 +98,16 @@ lemma integral_prod_eq_set_integrals {s₁ : Set ℝ} {s₂ : Set ℝ} {f : ℝ 
     Set.indicator s₂ (fun y => ∫ (x : ℝ) in s₁, f (x, y) ∂ℙ) y := by rfl
 
   simp_rw [this, integral_indicator hs₂, mul_comm, ←indicator_const]
+
   exact (MeasureTheory.integrable_indicator_iff (MeasurableSet.prod hs₁ hs₂)).mpr hf
+
+-- This can probably have a weaker condition, that f s is almost everywhere non-negative.
+lemma set_integral_toReal_ofReal [MeasureSpace α] {s : Set α} {f : α → ℝ} (hs : ∀ x ∈ s, f x ≥ 0) :
+  ∫ (x : α) in s, ENNReal.toReal (ENNReal.ofReal (f x)) = ∫ (x : α) in s, f x := by sorry
 
 end general_lemmas
 
+/- Simpler lemmas specific to Buffon's needle. -/
 section lemmas₁
 
 lemma N_eq (x θ : ℝ) : N l (x, θ) = Set.indicator (Set.Icc (-l * θ.sin / 2) (l * θ.sin / 2)) 1 x := by
@@ -124,7 +131,20 @@ lemma N_pos (p : ℝ × ℝ) : N l p ≥ 0 := by
   · rw [if_pos h]; exact zero_le_one
   · rw [if_neg h]
 
-lemma N_measurable : Measurable (N l) := by sorry
+lemma N_measurable : Measurable (N l) := by
+  have : N l = fun ⟨x, θ⟩ => Set.indicator (Set.Icc (-l * θ.sin / 2) (l * θ.sin / 2)) 1 x := by
+    ext ⟨x, θ⟩
+    exact N_eq l x θ
+
+  rw [this]
+  simp only
+
+  apply Measurable.indicator measurable_const
+  /-
+    TODO:  MeasurableSet fun ⟨x, θ⟩ => Set.Icc (-l * Real.sin θ / 2) (l * Real.sin θ / 2) x
+    - might be easier to split this into cases, `l ≤ d` (short) and `l > d` (long).
+  -/
+  sorry
 
 lemma B_range_volume : ℙ (Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π) = ENNReal.ofReal (d * π) := by
   rw [MeasureTheory.Measure.volume_eq_prod, MeasureTheory.Measure.prod_prod]
@@ -242,7 +262,8 @@ theorem buffon_short (h : l ≤ d) : 𝔼[N l ∘ B] = (2 * l) * (d * π)⁻¹ :
 
   have : ∀ θ, MeasurableSet (Set.Icc (-l * Real.sin θ / 2) (l * Real.sin θ / 2)) := by sorry
 
-  conv => lhs; arg 2; intro θ; rw [integral_indicator (this θ)]
+  simp_rw [integral_indicator (this _)]
+  -- TODO: specify necessary lemmas
   simp
 
   /-
@@ -255,22 +276,19 @@ theorem buffon_short (h : l ≤ d) : 𝔼[N l ∘ B] = (2 * l) * (d * π)⁻¹ :
           Set.Icc (-(l * Real.sin θ) / 2) (l * Real.sin θ / 2) ∩ Set.Icc (-d / 2) (d / 2)
         ))
         ∂ℙ = 2 * l
-
-    Which looks like a pretty manageable form.
   -/
 
-  conv => lhs; arg 2; intro θ; rw [buffon_short_inter d l θ h]
+  simp_rw [buffon_short_inter d l _ h, Real.volume_Icc]
+  ring_nf
 
-  simp
-  conv => lhs; ring_nf
+  have (l : ℝ) : ∀ θ ∈ Set.Icc 0 π, l * θ.sin ≥ 0 := by sorry
 
-  conv => lhs; arg 2; intro θ; rw [ENNReal.toReal_ofReal sorry]
-  conv => lhs; arg 2; intro θ; rw [mul_comm]
-  rw [← set_integral_congr_set_ae Ioc_ae_eq_Icc]
-  rw [← intervalIntegral.integral_of_le]
-  rw [intervalIntegral.integral_mul_const]
-  rw [integral_sin]
-  simp
-  norm_num
+  simp_rw [set_integral_toReal_ofReal (this l)]
+  conv in (l * (Real.sin _)) => rw [mul_comm]
 
-  all_goals sorry
+  rw [← set_integral_congr_set_ae Ioc_ae_eq_Icc,
+    ← intervalIntegral.integral_of_le (le_of_lt Real.pi_pos),
+    intervalIntegral.integral_mul_const, integral_sin]
+
+  simp only [Real.cos_zero, Real.cos_pi, sub_neg_eq_add, mul_eq_mul_right_iff,
+    one_add_one_eq_two, mul_comm]
