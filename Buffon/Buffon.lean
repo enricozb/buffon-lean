@@ -42,6 +42,65 @@ noncomputable def N : (ℝ × ℝ) → ℝ := fun ⟨x, θ⟩ => by
   haveI : Decidable (0 ∈ needle_set l x θ) := Classical.dec _
   exact if 0 ∈ needle_set l x θ then 1 else 0
 
+/- Lemmas that are not specific to Buffon's needle. -/
+section general_lemmas
+
+lemma indicator_const (c : ℝ) :
+  Set.indicator s (fun x => c) x =
+  c * (Set.indicator s 1 x) := by sorry
+
+lemma indicator_prod_left {α β γ : Type _} [Zero γ] {s₁ : Set α} {s₂ : Set β} {f : α × β → γ} {a : α} {b : β} :
+  Set.indicator (s₁ ×ˢ s₂) f (a, b) = Set.indicator s₁ (fun a => Set.indicator s₂ (fun b => f ⟨a, b⟩) b) a := by
+  simp_rw [Set.indicator]
+  by_cases h : (a, b) ∈ s₁ ×ˢ s₂
+  · rw [if_pos h, if_pos (Set.mem_prod.mp h).left, if_pos (Set.mem_prod.mp h).right]
+  · rw [if_neg h]
+    apply Or.elim (not_and_or.mp h)
+    · intro ha; rw [if_neg ha]
+    · intro hb; rw [if_neg hb, ite_self]
+
+lemma indicator_prod_right {α β γ : Type _} [Zero γ] {s₁ : Set α} {s₂ : Set β} {f : α × β → γ} {a : α} {b : β} :
+  Set.indicator (s₁ ×ˢ s₂) f (a, b) = Set.indicator s₂ (fun b => Set.indicator s₁ (fun a => f ⟨a, b⟩) a) b := by
+  simp_rw [Set.indicator]
+  by_cases h : (a, b) ∈ s₁ ×ˢ s₂
+  · rw [if_pos h, if_pos (Set.mem_prod.mp h).left, if_pos (Set.mem_prod.mp h).right]
+  · rw [if_neg h]
+    apply Or.elim (not_and_or.mp h)
+    · intro ha; rw [if_neg ha, ite_self]
+    · intro hb; rw [if_neg hb]
+
+lemma integral_prod_eq_set_integrals {s₁ : Set ℝ} {s₂ : Set ℝ} {f : ℝ × ℝ → ℝ}
+  (hs₁ : MeasurableSet s₁) (hs₂ : MeasurableSet s₂)
+  (hf : MeasureTheory.IntegrableOn f (s₁ ×ˢ s₂)):
+  ∫ (a : ℝ × ℝ), Set.indicator (s₁ ×ˢ s₂) 1 a * f a ∂Measure.prod ℙ ℙ =
+  ∫ y in s₂, ∫ x in s₁, f (x, y) := by
+  rw [integral_prod_symm]
+  simp_rw [indicator_prod_left, mul_comm, Pi.one_apply, ←Pi.one_def]
+
+  conv in (_ * _) => rw [mul_comm]
+  simp_rw [← smul_eq_mul, ← Set.indicator_smul_const_apply, Pi.one_apply]
+
+  have (x y : ℝ) :
+    Set.indicator s₁ (fun _ => Set.indicator s₂ (fun _ => f (x, y)) y) x =
+    Set.indicator s₁ (fun x => Set.indicator s₂ (fun y => f (x, y)) y) x := by rfl
+
+  simp_rw [smul_eq_mul, one_mul]
+  conv in (Set.indicator _ _ _) => rw [this]
+  simp_rw [integral_indicator hs₁]
+
+  have (x y : ℝ) : Set.indicator s₂ (fun y => f (x, y)) y =
+    Set.indicator s₂ (fun _ => f (x, y)) y := by rfl
+
+  simp_rw [this, indicator_const, ← smul_eq_mul, integral_smul_const, smul_eq_mul, ← indicator_const]
+
+  have (y : ℝ) : Set.indicator s₂ (fun _ => ∫ (x : ℝ) in s₁, f (x, y) ∂ℙ) y =
+    Set.indicator s₂ (fun y => ∫ (x : ℝ) in s₁, f (x, y) ∂ℙ) y := by rfl
+
+  simp_rw [this, integral_indicator hs₂, mul_comm, ←indicator_const]
+  exact (MeasureTheory.integrable_indicator_iff (MeasurableSet.prod hs₁ hs₂)).mpr hf
+
+end general_lemmas
+
 section lemmas₁
 
 lemma N_eq (x θ : ℝ) : N l (x, θ) = Set.indicator (Set.Icc (-l * θ.sin / 2) (l * θ.sin / 2)) 1 x := by
@@ -59,7 +118,11 @@ lemma N_eq (x θ : ℝ) : N l (x, θ) = Set.indicator (Set.Icc (-l * θ.sin / 2)
       exact hx hz
     rw [if_neg this]
 
-lemma N_pos (p : ℝ × ℝ) : N l p ≥ 0 := by sorry
+lemma N_pos (p : ℝ × ℝ) : N l p ≥ 0 := by
+  simp_rw [N]
+  by_cases h : 0 ∈ needle_set l p.1 p.2
+  · rw [if_pos h]; exact zero_le_one
+  · rw [if_neg h]
 
 lemma N_measurable : Measurable (N l) := by sorry
 
@@ -89,16 +152,6 @@ lemma indicator_ofReal_inv_eq (hc : c ≥ 0) :
 lemma indicator_NNReal_smul_eq (s : Set α) (c₁ c₂ : ℝ) (hc₁ : c₁ ≥ 0) :
   Set.indicator s (fun x => ⟨c₁, hc₁⟩⁻¹ : α → NNReal) a • c₂ =
   Set.indicator s (fun x => c₁⁻¹ : α → ℝ) a * c₂ := by sorry
-
-lemma indicator_const (c : ℝ) :
-  Set.indicator s (fun x => c) x =
-  c * (Set.indicator s 1 x) := by sorry
-
-lemma indicator_prod_right {α β γ : Type _} [Zero γ] {s₁ : Set α} {s₂ : Set β} {f : α × β → γ} {a : α} {b : β} :
-  Set.indicator (s₁ ×ˢ s₂) f (a, b) =
-  Set.indicator s₂
-    (fun b => Set.indicator s₁ (f ⟨·, b⟩) a)
-    b := by sorry
 
 lemma mul_pi_ge_zero (r : ℝ) (hr : r ≥ 0) : r * π ≥ 0 := by sorry
 lemma mul_pi_ne_zero (r : ℝ) (hr : r ≠ 0) : (r * π)⁻¹ ≠ 0 := by sorry
@@ -172,16 +225,6 @@ section lemmas₂
 
     all_goals sorry
 
-  lemma integral_prod_eq_set_integrals (s₁ : Set ℝ) (s₂ : Set ℝ) (f : ℝ × ℝ → ℝ) :
-    ∫ (a : ℝ × ℝ), Set.indicator (s₁ ×ˢ s₂) 1 a * f a ∂Measure.prod ℙ ℙ =
-    ∫ y in s₂, ∫ x in s₁, f (x, y) := by
-    rw [integral_prod_symm]
-    simp_rw [indicator_prod_right]
-    simp_rw [mul_comm]
-    simp only [Pi.one_apply, ←Pi.one_def]
-
-    all_goals sorry
-
 end lemmas₂
 
 theorem buffon_short (h : l ≤ d) : 𝔼[N l ∘ B] = (2 * l) * (d * π)⁻¹ := by
@@ -193,7 +236,9 @@ theorem buffon_short (h : l ≤ d) : 𝔼[N l ∘ B] = (2 * l) * (d * π)⁻¹ :
   apply mul_eq_mul_right_iff.mpr
   apply (or_iff_left (mul_pi_ne_zero d (ne_of_lt hd).symm)).mpr
 
-  simp_rw [integral_prod_eq_set_integrals, N_eq]
+  have : IntegrableOn (N l) ((Set.Icc (-d / 2) (d / 2)) ×ˢ (Set.Icc 0 π)) := by sorry
+
+  simp_rw [integral_prod_eq_set_integrals (X_space_measurable d) Θ_space_measurable this, N_eq]
 
   have : ∀ θ, MeasurableSet (Set.Icc (-l * Real.sin θ / 2) (l * Real.sin θ / 2)) := by sorry
 
