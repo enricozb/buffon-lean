@@ -46,8 +46,6 @@ noncomputable def N : (ℝ × ℝ) → ℝ := fun ⟨x, θ⟩ => by
 /- Lemmas that are not specific to Buffon's needle. -/
 section general_lemmas
 
-lemma neg_le_zero (a : ℝ) : -a ≤ 0 ↔ 0 ≤ a := Left.neg_nonpos_iff
-
 lemma indicator_const (c : ℝ) : Set.indicator s (fun _ => c) x = c * (Set.indicator s 1 x) := by
   simp_rw [Set.indicator]
   by_cases h : x ∈ s
@@ -131,7 +129,8 @@ lemma mul_sin_le (l d θ : ℝ) (hl₁ : l ≥ 0) (hl₂ : l ≤ d) : l * θ.sin
   apply mul_le_mul_of_le_of_le hl₂ θ.sin_le_one hl₁ zero_le_one
 
 lemma neg_mul_sin_le (l d θ : ℝ) (hl₁ : l ≥ 0) (hl₂ : l ≤ d) : -(l * θ.sin) ≤ d := by
-  sorry
+  rw [← mul_one d, mul_comm, ← neg_mul, mul_comm, ←Real.sin_neg]
+  apply mul_le_mul_of_le_of_le hl₂ (-θ).sin_le_one hl₁ zero_le_one
 
 end general_lemmas
 
@@ -159,6 +158,12 @@ lemma N_pos (p : ℝ × ℝ) : N l p ≥ 0 := by
   · rw [if_pos h]; exact zero_le_one
   · rw [if_neg h]
 
+lemma N_le_one (p : ℝ × ℝ) : N l p ≤ 1 := by
+  simp_rw [N]
+  by_cases h : 0 ∈ needle_set l p.1 p.2
+  · rw [if_pos h]
+  · rw [if_neg h]; exact zero_le_one
+
 lemma N_measurable : Measurable (N l) := by
   have : N l = fun ⟨x, θ⟩ => Set.indicator (Set.Icc (-l * θ.sin / 2) (l * θ.sin / 2)) 1 x := by
     ext ⟨x, θ⟩
@@ -172,6 +177,8 @@ lemma N_measurable : Measurable (N l) := by
     TODO:  MeasurableSet fun ⟨x, θ⟩ => Set.Icc (-l * Real.sin θ / 2) (l * Real.sin θ / 2) x
     - might be easier to split this into cases, `l ≤ d` (short) and `l > d` (long).
   -/
+  simp only [Set.Icc, setOf]
+
   sorry
 
 lemma B_range_volume : ℙ (Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π) = ENNReal.ofReal (d * π) := by
@@ -193,9 +200,19 @@ instance instBHasPDF : HasPDF B ℙ := by
     simp only [ge_iff_le, not_le, gt_iff_lt, Set.Icc_prod_Icc, Prod.mk_le_mk, not_and, Prod.mk_lt_mk,
       measurableSet_Icc]
 
-lemma indicator_ofReal_inv_eq (hc : c ≥ 0) :
+lemma indicator_ofReal_inv_eq (hc : c > 0) :
   Set.indicator s ((ENNReal.ofReal c)⁻¹ • 1) =
-  fun x => ENNReal.ofNNReal (Set.indicator s (fun x => ⟨c, hc⟩⁻¹) x) := by sorry
+  fun x => ENNReal.ofNNReal (Set.indicator s (fun _ => ⟨c, le_of_lt hc⟩⁻¹) x) := by
+  ext x
+  by_cases hx : x ∈ s
+  · simp only [Set.indicator_of_mem hx, Pi.smul_apply, Pi.one_apply, smul_eq_mul, mul_one, ne_eq]
+    apply inv_eq_iff_eq_inv.mpr
+    rw [ENNReal.ofReal_eq_coe_nnreal, ENNReal.coe_inv ?pos, inv_inv]
+    case pos =>
+      rw [←NNReal.coe_ne_zero, NNReal.coe_mk]
+      exact ne_of_gt hc
+  · simp only [Set.indicator_of_not_mem hx]
+    rfl
 
 lemma indicator_NNReal_smul_const_eq_mul_const {a : α} (s : Set α) (c₁ c₂ : ℝ) (hc₁ : c₁ ≥ 0) :
   Set.indicator s (fun _ => ⟨c₁, hc₁⟩⁻¹ : α → NNReal) a • c₂ =
@@ -206,6 +223,7 @@ lemma indicator_NNReal_smul_const_eq_mul_const {a : α} (s : Set α) (c₁ c₂ 
 
 lemma Real_measure_prod : (ℙ : Measure (ℝ × ℝ)) = Measure.prod (ℙ : Measure ℝ) (ℙ : Measure ℝ) := rfl
 
+lemma B_space_measurable : MeasurableSet ((Set.Icc (-d / 2) (d / 2)) ×ˢ (Set.Icc 0 π)) := MeasurableSet.prod measurableSet_Icc measurableSet_Icc
 lemma X_space_measurable : MeasurableSet (Set.Icc (-d / 2) (d / 2)) := measurableSet_Icc
 lemma Θ_space_measurable : MeasurableSet (Set.Icc 0 π) := measurableSet_Icc
 
@@ -225,10 +243,38 @@ lemma buffon_short_inter (d l θ : ℝ) (hl₁ : l ≥ 0) (hl₂ : l ≤ d) :
     · exact neg_le.mpr (neg_mul_sin_le l d θ hl₁ hl₂)
     · exact mul_sin_le l d θ hl₁ hl₂
 
+lemma N_strongly_measurable : StronglyMeasurable (N l) := by sorry
+
+lemma N_integrable_on : IntegrableOn (N l) ((Set.Icc (-d / 2) (d / 2)) ×ˢ (Set.Icc 0 π)) := by
+  let S := (Set.Icc (-d / 2) (d / 2)) ×ˢ (Set.Icc 0 π)
+  simp only [IntegrableOn, Integrable]
+  apply And.intro
+  · apply MeasureTheory.AEStronglyMeasurable.restrict
+    exact (N_strongly_measurable l).aestronglyMeasurable
+
+  · unfold HasFiniteIntegral
+    rw [← MeasureTheory.lintegral_indicator _ (B_space_measurable d)]
+
+    have integral_le : ∫⁻ (a : ℝ × ℝ), Set.indicator S (fun a => ↑‖N l a‖₊) a ∂ℙ ≤ ℙ S := by
+      apply MeasureTheory.lintegral_le_meas
+      · intro p
+        by_cases hp : p ∈ S
+        · simp_rw [Set.indicator_of_mem hp, Real.ennnorm_eq_ofReal (N_pos l p),
+            ENNReal.ofReal_le_one, N_le_one]
+        · simp_rw [Set.indicator_of_not_mem hp, zero_le_one]
+      · intro p hp
+        simp_rw [Set.indicator_of_not_mem hp]
+
+    calc
+      ∫⁻ (a : ℝ × ℝ), Set.indicator S (fun a => ↑‖N l a‖₊) a ∂ℙ ≤ ℙ S := integral_le
+      _ = ENNReal.ofReal (d * π) := B_range_volume d hd
+      _ < ⊤ := ENNReal.ofReal_lt_top
+
 end lemmas₁
 
 -- Lemmas that are clear(er) steps in the proof.
 section lemmas₂
+
   lemma N_expectation_eq_prod_integral : 𝔼[N l ∘ B] = ∫ (x : ℝ × ℝ), N l x ∂map B ℙ := by
     have N_ae_pos₁ : 0 ≤ᶠ[ae ℙ] (N l ∘ B) := by
       unfold Filter.EventuallyLE
@@ -251,7 +297,10 @@ section lemmas₂
       - Actually I think this is true because I think `Integrable N l` is true,
         and integrability implies this.
     -/
-    have ae_strongly_measurable : AEStronglyMeasurable (N l ∘ B) ℙ := by sorry
+    have ae_strongly_measurable : AEStronglyMeasurable (N l ∘ B) ℙ := by
+      apply StronglyMeasurable.aestronglyMeasurable
+      apply StronglyMeasurable.comp_measurable (N_strongly_measurable l) hBₘ
+
     rw [MeasureTheory.integral_eq_lintegral_of_nonneg_ae N_ae_pos₁ ae_strongly_measurable]
 
     have ofReal_comp : ∀ ω, ENNReal.ofReal ((N l ∘ B) ω) = ((ENNReal.ofReal ∘ (N l)) ∘ B) ω  := fun ω => rfl
@@ -265,7 +314,20 @@ section lemmas₂
     have N_integral_pos : 0 ≤ ∫ (x : ℝ × ℝ), N l x ∂map B ℙ :=
       MeasureTheory.integral_nonneg (N_pos l)
 
-    have N_integrable : Integrable (N l) (map B ℙ) := by sorry
+    -- TODO: move this out pls
+    have N_integrable : Integrable (N l) (map B ℙ) := by
+      rw [hB]
+      apply And.intro
+      · sorry
+      · unfold HasFiniteIntegral
+        simp only [ge_iff_le, not_le, gt_iff_lt, Prod.mk_le_mk, not_and, Prod.mk_lt_mk,
+          lintegral_smul_measure]
+        rw [B_range_volume]
+        have : ∫⁻ (a : ℝ × ℝ) in Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π, ↑‖N l a‖₊ ∂ℙ < ⊤ := sorry
+        -- TODO:
+        · sorry
+        · sorry
+
     rw [← MeasureTheory.ofReal_integral_eq_lintegral_ofReal N_integrable N_ae_pos₂,
       ENNReal.toReal_ofReal N_integral_pos]
 
@@ -276,7 +338,7 @@ section lemmas₂
     rw [MeasureTheory.withDensity_congr_ae (MeasureTheory.pdf.IsUniform.pdf_eq _ ?zero ?top hB)]
     rw [B_range_volume d hd]
     rw [Real_measure_prod]
-    rw [indicator_ofReal_inv_eq (mul_pi_nonneg d (le_of_lt hd))]
+    rw [indicator_ofReal_inv_eq (mul_pos hd Real.pi_pos)]
     rw [integral_withDensity_eq_integral_smul ?mes (N l)]
     simp_rw [indicator_NNReal_smul_const_eq_mul_const, indicator_const, mul_assoc]
 
@@ -288,23 +350,18 @@ section lemmas₂
 end lemmas₂
 
 theorem buffon_short (h : l ≤ d) : 𝔼[N l ∘ B] = (2 * l) * (d * π)⁻¹ := by
-  -- ∫ (a : Ω), (N l ∘ B) a = 2 * l * (d * π)⁻¹
-  rw [N_expectation_eq_prod_integral l B hBₘ]
-  rw [N_integral_eq_indicator_integral d l hd B hB]
+  rw [N_expectation_eq_prod_integral d l B hBₘ hB,
+    N_integral_eq_indicator_integral d l hd B hB, mul_comm]
 
-  rw [mul_comm]
   apply mul_eq_mul_right_iff.mpr
   apply (or_iff_left (mul_pi_inv_ne_zero d (ne_of_lt hd).symm)).mpr
 
-  have : IntegrableOn (N l) ((Set.Icc (-d / 2) (d / 2)) ×ˢ (Set.Icc 0 π)) := by sorry
+  simp_rw [integral_prod_eq_set_integrals (X_space_measurable d) Θ_space_measurable (N_integrable_on d l hd),
+    N_eq, integral_indicator measurableSet_Icc]
 
-  simp_rw [integral_prod_eq_set_integrals (X_space_measurable d) Θ_space_measurable this, N_eq]
-
-  have : ∀ θ, MeasurableSet (Set.Icc (-l * Real.sin θ / 2) (l * Real.sin θ / 2)) := by sorry
-
-  simp_rw [integral_indicator (this _)]
-  -- TODO: specify necessary lemmas
-  simp
+  simp only [ge_iff_le, not_le, gt_iff_lt, neg_mul, measurableSet_Icc,
+    restrict_restrict, Pi.one_apply, integral_const, MeasurableSet.univ,
+    restrict_apply, Set.univ_inter, smul_eq_mul, mul_one]
 
   /-
     The next line is the first use of `h : l ≤ d`. Everything prior should work
@@ -321,11 +378,7 @@ theorem buffon_short (h : l ≤ d) : 𝔼[N l ∘ B] = (2 * l) * (d * π)⁻¹ :
   simp_rw [buffon_short_inter d l _ (le_of_lt hl) h, Real.volume_Icc]
   ring_nf
 
-  have l_sin_nonneg (l : ℝ) (hl : l ≥ 0) : ∀ θ ∈ Set.Icc 0 π, l * θ.sin ≥ 0 := by
-    intro θ hθ
-    exact mul_nonneg hl (Real.sin_nonneg_of_mem_Icc hθ)
-
-  simp_rw [set_integral_toReal_ofReal (Θ_space_measurable) (l_sin_nonneg l (le_of_lt hl))]
+  simp_rw [set_integral_toReal_ofReal (Θ_space_measurable) (mul_sin_nonneg l (le_of_lt hl))]
   conv in (l * (Real.sin _)) => rw [mul_comm]
 
   rw [← set_integral_congr_set_ae Ioc_ae_eq_Icc,
