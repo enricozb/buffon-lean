@@ -243,7 +243,38 @@ lemma buffon_short_inter (d l θ : ℝ) (hl₁ : l ≥ 0) (hl₂ : l ≤ d) :
     · exact neg_le.mpr (neg_mul_sin_le l d θ hl₁ hl₂)
     · exact mul_sin_le l d θ hl₁ hl₂
 
-lemma N_strongly_measurable : StronglyMeasurable (N l) := by sorry
+lemma N_strongly_measurable : StronglyMeasurable (N l) := by
+  apply stronglyMeasurable_iff_measurable_separable.mpr
+  apply And.intro
+  · exact N_measurable l
+  · have : Set.range (N l) = {0, 1} := by
+      rw [Set.range]
+      ext x
+      apply Iff.intro
+      · intro hx
+        simp only [Prod.exists, Set.mem_setOf_eq, N] at hx
+        have ⟨a, b, hab⟩ := hx
+        simp only [Set.mem_singleton_iff, zero_ne_one, Set.mem_insert_iff]
+        by_cases hz : 0 ∈ needle_set l a b
+        · rw [if_pos hz] at hab; exact Or.inr hab.symm
+        · rw [if_neg hz] at hab; exact Or.inl hab.symm
+      · intro hx
+        simp only [Set.mem_singleton_iff, zero_ne_one, Set.mem_insert_iff] at hx
+        simp only [N, needle_set, ge_iff_le, tsub_le_iff_right, not_le, gt_iff_lt, Set.mem_Icc, zero_add, Prod.exists,
+          Set.mem_setOf_eq]
+        apply Or.elim hx
+        · intro hzero
+          -- pick θ = 0 and x = anything other than d?
+          sorry
+        · intro hone
+          apply Exists.intro 0
+          apply Exists.intro 0
+          simp only [Real.sin_zero, zero_mul, zero_div, le_refl, add_zero, and_self, ite_true]
+          exact hone.symm
+
+    apply Exists.intro {0, 1}
+    simp only [Set.mem_singleton_iff, zero_ne_one, Set.countable_insert, Set.countable_singleton, true_and]
+    simp_rw [this, subset_closure]
 
 lemma N_integrable_on : IntegrableOn (N l) ((Set.Icc (-d / 2) (d / 2)) ×ˢ (Set.Icc 0 π)) := by
   let S := (Set.Icc (-d / 2) (d / 2)) ×ˢ (Set.Icc 0 π)
