@@ -38,7 +38,14 @@ variable
 -/
 def needle_set (x θ : ℝ) : Set ℝ := Set.Icc (x - θ.sin * l / 2) (x + θ.sin * l / 2)
 
-/-- Random variable representing whether a needle crosses a line. -/
+/--
+  Indicator function on whether `⟨x, θ⟩` cross a line. Note that this function
+  *does not* make reference to `d`, it's expected that inputs to this function
+  are bounded by `[-d/2, d/2] × [0, π]`.
+
+  This is used to create a random variable `N l ∘ B`, that has the expected
+  distribution of Buffon's needle.
+ -/
 noncomputable def N : (ℝ × ℝ) → ℝ := fun ⟨x, θ⟩ => by
   haveI : Decidable (0 ∈ needle_set l x θ) := Classical.dec _
   exact if 0 ∈ needle_set l x θ then 1 else 0
@@ -52,9 +59,10 @@ lemma indicator_const (c : ℝ) : Set.indicator s (fun _ => c) x = c * (Set.indi
   · simp_rw [if_pos h, Pi.one_apply, mul_one]
   · simp_rw [if_neg h, mul_zero]
 
-lemma indicator_prod_left
-  {α β γ : Type _} [Zero γ] {s₁ : Set α} {s₂ : Set β} {f : α × β → γ} {a : α} {b : β} :
-  Set.indicator (s₁ ×ˢ s₂) f (a, b) = Set.indicator s₁ (fun a => Set.indicator s₂ (fun b => f ⟨a, b⟩) b) a := by
+lemma indicator_prod_left {α β γ : Type _} [Zero γ] {s₁ : Set α} {s₂ : Set β}
+    {f : α × β → γ} {a : α} {b : β} :
+    Set.indicator (s₁ ×ˢ s₂) f (a, b) =
+    Set.indicator s₁ (fun a => Set.indicator s₂ (fun b => f ⟨a, b⟩) b) a := by
   simp_rw [Set.indicator]
   by_cases h : (a, b) ∈ s₁ ×ˢ s₂
   · rw [if_pos h, if_pos (Set.mem_prod.mp h).left, if_pos (Set.mem_prod.mp h).right]
@@ -63,8 +71,10 @@ lemma indicator_prod_left
     · intro ha; rw [if_neg ha]
     · intro hb; rw [if_neg hb, ite_self]
 
-lemma indicator_prod_right {α β γ : Type _} [Zero γ] {s₁ : Set α} {s₂ : Set β} {f : α × β → γ} {a : α} {b : β} :
-  Set.indicator (s₁ ×ˢ s₂) f (a, b) = Set.indicator s₂ (fun b => Set.indicator s₁ (fun a => f ⟨a, b⟩) a) b := by
+lemma indicator_prod_right {α β γ : Type _} [Zero γ] {s₁ : Set α} {s₂ : Set β}
+    {f : α × β → γ} {a : α} {b : β} :
+    Set.indicator (s₁ ×ˢ s₂) f (a, b) =
+    Set.indicator s₂ (fun b => Set.indicator s₁ (fun a => f ⟨a, b⟩) a) b := by
   simp_rw [Set.indicator]
   by_cases h : (a, b) ∈ s₁ ×ˢ s₂
   · rw [if_pos h, if_pos (Set.mem_prod.mp h).left, if_pos (Set.mem_prod.mp h).right]
@@ -74,30 +84,26 @@ lemma indicator_prod_right {α β γ : Type _} [Zero γ] {s₁ : Set α} {s₂ :
     · intro hb; rw [if_neg hb]
 
 lemma integral_prod_eq_set_integrals {s₁ : Set ℝ} {s₂ : Set ℝ} {f : ℝ × ℝ → ℝ}
-  (hs₁ : MeasurableSet s₁) (hs₂ : MeasurableSet s₂)
-  (hf : MeasureTheory.IntegrableOn f (s₁ ×ˢ s₂)):
-  ∫ (a : ℝ × ℝ), Set.indicator (s₁ ×ˢ s₂) 1 a * f a ∂Measure.prod ℙ ℙ =
-  ∫ y in s₂, ∫ x in s₁, f (x, y) := by
+    (hs₁ : MeasurableSet s₁) (hs₂ : MeasurableSet s₂)
+    (hf : MeasureTheory.IntegrableOn f (s₁ ×ˢ s₂)) :
+    ∫ (a : ℝ × ℝ), Set.indicator (s₁ ×ˢ s₂) 1 a * f a ∂Measure.prod ℙ ℙ =
+    ∫ y in s₂, ∫ x in s₁, f (x, y) := by
   rw [integral_prod_symm]
   simp_rw [indicator_prod_left, mul_comm, Pi.one_apply, ←Pi.one_def]
-
   conv in (_ * _) => rw [mul_comm]
   simp_rw [← smul_eq_mul, ← Set.indicator_smul_const_apply, Pi.one_apply]
 
   have (x y : ℝ) :
     Set.indicator s₁ (fun _ => Set.indicator s₂ (fun _ => f (x, y)) y) x =
     Set.indicator s₁ (fun x => Set.indicator s₂ (fun y => f (x, y)) y) x := by rfl
-
   simp_rw [smul_eq_mul, one_mul, this, integral_indicator hs₁]
 
   have (x y : ℝ) : Set.indicator s₂ (fun y => f (x, y)) y =
     Set.indicator s₂ (fun _ => f (x, y)) y := by rfl
-
   simp_rw [this, indicator_const, ← smul_eq_mul, integral_smul_const, smul_eq_mul, ← indicator_const]
 
   have (y : ℝ) : Set.indicator s₂ (fun _ => ∫ (x : ℝ) in s₁, f (x, y) ∂ℙ) y =
     Set.indicator s₂ (fun y => ∫ (x : ℝ) in s₁, f (x, y) ∂ℙ) y := by rfl
-
   simp_rw [this, integral_indicator hs₂, mul_comm, ←indicator_const]
 
   exact (MeasureTheory.integrable_indicator_iff (MeasurableSet.prod hs₁ hs₂)).mpr hf
@@ -173,13 +179,19 @@ lemma N_measurable : Measurable (N l) := by
   simp only
 
   apply Measurable.indicator measurable_const
-  /-
-    TODO:  MeasurableSet fun ⟨x, θ⟩ => Set.Icc (-l * Real.sin θ / 2) (l * Real.sin θ / 2) x
-    - might be easier to split this into cases, `l ≤ d` (short) and `l > d` (long).
-  -/
-  simp only [Set.Icc, setOf]
+  apply IsClosed.measurableSet
+  apply IsClosed.inter
 
-  sorry
+  case' h.h₁ => apply isClosed_le _ continuous_fst
+  case' h.h₂ => apply isClosed_le continuous_fst
+
+  all_goals
+  · conv in (_ * _) => rw [mul_comm]
+    simp_rw [mul_div_assoc]
+    apply Continuous.mul _ continuous_const
+    have : (fun (x : ℝ × ℝ) => Real.sin x.2) = Real.sin ∘ Prod.snd := by rfl
+    rw [this]
+    apply Continuous.comp Real.continuous_sin continuous_snd
 
 lemma B_range_volume : ℙ (Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π) = ENNReal.ofReal (d * π) := by
   rw [MeasureTheory.Measure.volume_eq_prod, MeasureTheory.Measure.prod_prod]
@@ -264,8 +276,10 @@ lemma N_strongly_measurable : StronglyMeasurable (N l) := by
           Set.mem_setOf_eq]
         apply Or.elim hx
         · intro hzero
-          -- pick θ = 0 and x = anything other than d?
-          sorry
+          apply Exists.intro 1
+          apply Exists.intro 0
+          simp only [Real.sin_zero, zero_mul, zero_div, add_zero, zero_le_one, and_true, if_neg (not_le_of_gt one_pos)]
+          exact hzero.symm
         · intro hone
           apply Exists.intro 0
           apply Exists.intro 0
@@ -353,11 +367,13 @@ section lemmas₂
       · unfold HasFiniteIntegral
         simp only [ge_iff_le, not_le, gt_iff_lt, Prod.mk_le_mk, not_and, Prod.mk_lt_mk,
           lintegral_smul_measure]
-        rw [B_range_volume]
-        have : ∫⁻ (a : ℝ × ℝ) in Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π, ↑‖N l a‖₊ ∂ℙ < ⊤ := sorry
-        -- TODO:
-        · sorry
-        · sorry
+        rw [B_range_volume d hd]
+        have : ∫⁻ (a : ℝ × ℝ) in Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π, ↑‖N l a‖₊ ∂ℙ < ⊤ := by
+          sorry
+        · apply ENNReal.mul_lt_top_iff.mpr
+          apply Or.inl
+          simp only [ENNReal.inv_lt_top, ENNReal.ofReal_pos]
+          apply And.intro (mul_pos hd Real.pi_pos) this
 
     rw [← MeasureTheory.ofReal_integral_eq_lintegral_ofReal N_integrable N_ae_pos₂,
       ENNReal.toReal_ofReal N_integral_pos]
@@ -366,22 +382,35 @@ section lemmas₂
     (d * π)⁻¹ * (∫ (a : ℝ × ℝ), Set.indicator (Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π) 1 a * N l a ∂Measure.prod ℙ ℙ) := by
     haveI : HasPDF B ℙ := instBHasPDF d hd B hB
     rw [MeasureTheory.map_eq_withDensity_pdf B ℙ]
-    rw [MeasureTheory.withDensity_congr_ae (MeasureTheory.pdf.IsUniform.pdf_eq _ ?zero ?top hB)]
-    rw [B_range_volume d hd]
-    rw [Real_measure_prod]
-    rw [indicator_ofReal_inv_eq (mul_pos hd Real.pi_pos)]
-    rw [integral_withDensity_eq_integral_smul ?mes (N l)]
-    simp_rw [indicator_NNReal_smul_const_eq_mul_const, indicator_const, mul_assoc]
 
-    conv => lhs; arg 2; intro p; rw [mul_comm, ← smul_eq_mul]
+    have nonzero : ℙ (Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π) ≠ 0 := by
+      rw [B_range_volume d hd]
+      simp only [ne_eq, ENNReal.ofReal_eq_zero, not_le, gt_iff_lt]
+      exact mul_pos hd Real.pi_pos
+
+    have nontop : ℙ (Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π) ≠ ⊤ := by
+      rw [B_range_volume d hd]
+      simp only [ne_eq, ENNReal.ofReal_ne_top, not_false_eq_true]
+
+    have pdf_eq := MeasureTheory.pdf.IsUniform.pdf_eq (B_space_measurable d) nonzero nontop hB
+
+    rw [MeasureTheory.withDensity_congr_ae pdf_eq, B_range_volume d hd,
+      Real_measure_prod, indicator_ofReal_inv_eq (mul_pos hd Real.pi_pos),
+      integral_withDensity_eq_integral_smul ?meas (N l)]
+
+    simp_rw [indicator_NNReal_smul_const_eq_mul_const, indicator_const, mul_assoc]
+    conv in (_ * _) => rw [mul_comm, ← smul_eq_mul]
     rw [integral_smul_const, smul_eq_mul, mul_comm]
 
-    all_goals sorry
+    case meas =>
+      apply Measurable.indicator
+      simp only [Nonneg.inv_mk, mul_inv_rev, measurable_const]
+      exact B_space_measurable d
 
 end lemmas₂
 
 theorem buffon_short (h : l ≤ d) : 𝔼[N l ∘ B] = (2 * l) * (d * π)⁻¹ := by
-  rw [N_expectation_eq_prod_integral d l B hBₘ hB,
+  rw [N_expectation_eq_prod_integral d l hd B hBₘ hB,
     N_integral_eq_indicator_integral d l hd B hB, mul_comm]
 
   apply mul_eq_mul_right_iff.mpr
