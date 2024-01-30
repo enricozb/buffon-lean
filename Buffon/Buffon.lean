@@ -363,13 +363,34 @@ section lemmas₂
     have N_integrable : Integrable (N l) (map B ℙ) := by
       rw [hB]
       apply And.intro
-      · sorry
+      · simp_rw [B_range_volume d hd, ←MeasureTheory.Measure.restrict_smul]
+        apply MeasureTheory.AEStronglyMeasurable.restrict
+        apply MeasureTheory.AEStronglyMeasurable.smul_measure
+        exact (N_measurable l).aestronglyMeasurable
+
       · unfold HasFiniteIntegral
         simp only [ge_iff_le, not_le, gt_iff_lt, Prod.mk_le_mk, not_and, Prod.mk_lt_mk,
           lintegral_smul_measure]
         rw [B_range_volume d hd]
         have : ∫⁻ (a : ℝ × ℝ) in Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π, ↑‖N l a‖₊ ∂ℙ < ⊤ := by
-          sorry
+
+          have h₁ : ∫⁻ (a : ℝ × ℝ) in Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π, ↑‖N l a‖₊ ∂ℙ ≤ ∫⁻ (_ : ℝ × ℝ) in Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π, 1 ∂ℙ := by
+            apply MeasureTheory.set_lintegral_mono' (B_space_measurable d)
+            · intro p _
+              simp only [ENNReal.coe_le_one_iff]
+              rw [Real.nnnorm_of_nonneg (N_pos l p)]
+              exact N_le_one l p
+
+          have h₂ : ∫⁻ (_ : ℝ × ℝ) in Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π, 1 ∂ℙ = ENNReal.ofReal (d * π) := by
+            simp only [lintegral_const, ge_iff_le, not_le, gt_iff_lt, Prod.mk_le_mk, not_and, Prod.mk_lt_mk,
+              MeasurableSet.univ, restrict_apply, Set.univ_inter, one_mul, B_range_volume d hd]
+
+          calc
+            ∫⁻ (a : ℝ × ℝ) in Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π, ↑‖N l a‖₊ ∂ℙ ≤ ∫⁻ (_ : ℝ × ℝ) in Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π, 1 ∂ℙ := h₁
+            _ = ENNReal.ofReal (d * π) := h₂
+            _ < ⊤ := ENNReal.ofReal_lt_top
+
+
         · apply ENNReal.mul_lt_top_iff.mpr
           apply Or.inl
           simp only [ENNReal.inv_lt_top, ENNReal.ofReal_pos]
