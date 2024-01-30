@@ -390,7 +390,6 @@ section lemmas₂
             _ = ENNReal.ofReal (d * π) := h₂
             _ < ⊤ := ENNReal.ofReal_lt_top
 
-
         · apply ENNReal.mul_lt_top_iff.mpr
           apply Or.inl
           simp only [ENNReal.inv_lt_top, ENNReal.ofReal_pos]
