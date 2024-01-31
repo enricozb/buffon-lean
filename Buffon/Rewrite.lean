@@ -63,7 +63,7 @@ variable
   x-coordinate `x`, of length `l` and angle `θ`. Note, `θ` is measured
   relative to the y-axis, that is, a vertical needle has `θ = 0`.
 -/
-def needle_proj_x (x θ : ℝ) : Set ℝ := Set.Icc (x - θ.sin * l / 2) (x + θ.sin * l / 2)
+def needle_x_proj (x θ : ℝ) : Set ℝ := Set.Icc (x - θ.sin * l / 2) (x + θ.sin * l / 2)
 
 /--
   A random variable representing whether the needle crosses a line.
@@ -75,7 +75,7 @@ def needle_proj_x (x θ : ℝ) : Set ℝ := Set.Icc (x - θ.sin * l / 2) (x + θ
   Note: `N : Ω → ℝ` is the random variable; the definition of `N' : ℝ × ℝ` is
   provided for convenience.
 -/
-noncomputable def N' (p : ℝ × ℝ) : ℝ := Set.indicator (needle_proj_x l p.1 p.2) 1 0
+noncomputable def N' (p : ℝ × ℝ) : ℝ := Set.indicator (needle_x_proj l p.1 p.2) 1 0
 noncomputable def N : Ω → ℝ := N' l ∘ B
 
 lemma short_needle_inter_eq (h : l ≤ d) (θ : ℝ) :
@@ -153,45 +153,32 @@ lemma N'_strongly_measurable : MeasureTheory.StronglyMeasurable (N' l) := by
       unfold N' Set.range
       rw [Set.subset_def]
       intro x ⟨p, hxp⟩
-      by_cases hp : 0 ∈ needle_proj_x l p.1 p.2
+      by_cases hp : 0 ∈ needle_x_proj l p.1 p.2
       · simp_rw [Set.indicator_of_mem hp, Pi.one_apply] at hxp
         apply Or.inr hxp.symm
       · simp_rw [Set.indicator_of_not_mem hp] at hxp
         apply Or.inl hxp.symm
 
-lemma N'_integrable : MeasureTheory.Integrable (N' l) := by
-  let B_range_indicator (p : ℝ × ℝ) : ℝ := Set.indicator ((Set.Icc (-d / 2) (d / 2)) ×ˢ (Set.Icc 0 π)) 1 p
-  have N'_nonneg p : N' l p ≥ 0 := by sorry
-  have N'_bound p : N' l p ≤ B_range_indicator p := by sorry
-  have N'_bound' p :
-      ENNReal.ofReal (N' l p) ≤ ENNReal.ofReal (B_range_indicator p) :=
-    ENNReal.ofReal_le_ofReal (N'_bound p)
-
-  apply And.intro (N'_strongly_measurable l).aestronglyMeasurable
-  · apply (MeasureTheory.hasFiniteIntegral_iff_norm (N' l)).mpr
-    simp_rw [Real.norm_of_nonneg (N'_nonneg _)]
-
-    have : ∫⁻ (a : ℝ × ℝ), ENNReal.ofReal (N' l a) ≤ ∫⁻ (a : ℝ × ℝ), ENNReal.ofReal (B_range_indicator a) :=
-      MeasureTheory.lintegral_mono N'_bound'
-
-    have : ∫⁻ (a : ℝ × ℝ), ENNReal.ofReal (B_range_indicator a) = ENNReal.ofReal (d * π) := by
-      unfold_let B_range_indicator
-      simp_rw [← Function.comp_apply (f := ENNReal.ofReal), ← Set.indicator_comp_of_zero ENNReal.ofReal_zero]
-      rw [MeasureTheory.lintegral_indicator (ENNReal.ofReal ∘ 1)]
-      simp_rw [Function.comp_apply, Pi.one_apply, ENNReal.ofReal_one, MeasureTheory.set_lintegral_const, one_mul,
-        B_range_volume d hd]
-
-      exact measurableSet_prod.mpr (Or.inl ⟨measurableSet_Icc, measurableSet_Icc⟩)
-
-    sorry
-
 lemma N'_integrable_prod :
     MeasureTheory.Integrable (N' l)
       (Measure.prod (Measure.restrict ℙ (Set.Icc (-d / 2) (d / 2))) (Measure.restrict ℙ (Set.Icc 0 π))) := by
 
-  rw [MeasureTheory.Measure.prod_restrict]
-  apply MeasureTheory.Integrable.restrict
-  exact N'_integrable d l hd
+  have N'_nonneg p : N' l p ≥ 0 := by
+    apply Set.indicator_apply_nonneg
+    simp only [Pi.one_apply, zero_le_one, implies_true]
+
+  have N'_le_one p : N' l p ≤ 1 := by
+    unfold N'
+    by_cases hp : 0 ∈ needle_x_proj l p.1 p.2
+    · simp_rw [Set.indicator_of_mem hp, Pi.one_apply, le_refl]
+    · simp_rw [Set.indicator_of_not_mem hp, zero_le_one]
+
+  apply And.intro (N'_strongly_measurable l).aestronglyMeasurable
+  · apply (MeasureTheory.hasFiniteIntegral_iff_norm (N' l)).mpr
+    apply lt_of_le_of_lt
+    apply MeasureTheory.lintegral_mono (g := 1)
+    simp only [Real.norm_eq_abs, abs_of_nonneg (N'_nonneg _)]
+    sorry
 
 theorem buffon_short (h : l ≤ d) : 𝔼[N l B] = (2 * l) * (d * π)⁻¹ := by
   simp_rw [N, Function.comp_apply]
@@ -208,9 +195,16 @@ theorem buffon_short (h : l ≤ d) : 𝔼[N l B] = (2 * l) * (d * π)⁻¹ := by
 
   apply Or.inl
 
+  have Real_measure_prod : (ℙ : Measure (ℝ × ℝ)) = Measure.prod ℙ ℙ := rfl
+
+  have : MeasureTheory.IntegrableOn (N' l) (Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π) := by
+    apply (MeasureTheory.integrableOn_def _ _ _).mpr
+    rw [Real_measure_prod, ← MeasureTheory.Measure.prod_restrict]
+    exact N'_integrable_prod d l hd
+
   rw [
-    (by rfl : (ℙ : Measure (ℝ × ℝ)) = Measure.prod ℙ ℙ),
-    MeasureTheory.set_integral_prod _ (N'_integrable d l hd).integrableOn,
+    Real_measure_prod,
+    MeasureTheory.set_integral_prod _ this,
     MeasureTheory.integral_integral_swap ?integrable,
   ]
 
@@ -224,7 +218,7 @@ theorem buffon_short (h : l ≤ d) : 𝔼[N l B] = (2 * l) * (d * π)⁻¹ := by
         N' (x, y) = 2 * l
   -/
 
-  unfold N' needle_proj_x
+  unfold N' needle_x_proj
   simp only [Set.mem_Icc]
 
   have indicator_eq (x θ : ℝ) :
