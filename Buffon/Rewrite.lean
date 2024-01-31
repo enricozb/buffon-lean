@@ -177,8 +177,17 @@ lemma N'_integrable_prod :
   · apply (MeasureTheory.hasFiniteIntegral_iff_norm (N' l)).mpr
     apply lt_of_le_of_lt
     apply MeasureTheory.lintegral_mono (g := 1)
-    simp only [Real.norm_eq_abs, abs_of_nonneg (N'_nonneg _)]
-    sorry
+    · simp only [Real.norm_eq_abs, abs_of_nonneg (N'_nonneg _)]
+      intro p
+      simp only [ENNReal.ofReal_le_one, Pi.one_apply]
+      exact N'_le_one p
+    simp only [Pi.one_apply, MeasureTheory.lintegral_const, one_mul, MeasureTheory.Measure.prod_restrict]
+    rw [MeasureTheory.Measure.restrict_apply MeasurableSet.univ, Set.univ_inter, MeasureTheory.Measure.prod_prod]
+    simp_rw [Real.volume_Icc]
+    ring_nf
+    rw [← ENNReal.ofReal_mul hd.le]
+    exact ENNReal.ofReal_lt_top
+
 
 theorem buffon_short (h : l ≤ d) : 𝔼[N l B] = (2 * l) * (d * π)⁻¹ := by
   simp_rw [N, Function.comp_apply]
