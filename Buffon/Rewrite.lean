@@ -295,20 +295,48 @@ lemma integral_inter_eq_two_mul :
     ∫ (θ : ℝ) in (0)..π, ENNReal.toReal (ℙ (Set.Icc 0 (d / 2) ∩ Set.Icc 0 (θ.sin * l / 2))) =
     2 * ∫ (θ : ℝ) in (0)..(π / 2), ENNReal.toReal (ℙ (Set.Icc 0 (d / 2) ∩ Set.Icc 0 (θ.sin * l / 2))) := by
 
+  simp_rw [Set.Icc_inter_Icc, sup_eq_max, inf_eq_min, max_self, Real.volume_Icc, sub_zero]
+
+  -- lhs
+  have (θ : ℝ) (hθ : θ ∈ Set.Ioc 0 π) : min (d / 2) (Real.sin θ * l / 2) ≥ 0 := by
+    rw [min_div_div_right zero_le_two d]
+    apply div_nonneg _ zero_le_two
+    by_cases h : d ≤ θ.sin * l
+    · rw [min_eq_left h]; exact hd.le
+    · rw [min_eq_right (not_le.mp h).le]; exact mul_nonneg (Real.sin_nonneg_of_mem_Icc (Set.mem_Icc_of_Ioc hθ)) hl.le
+  simp_rw [intervalIntegral.integral_of_le Real.pi_pos.le, set_integral_toReal_ofReal measurableSet_Ioc this]
+
+  -- rhs
+  have (θ : ℝ) (hθ : θ ∈ Set.Ioc 0 (π/2)) : min (d / 2) (Real.sin θ * l / 2) ≥ 0 := by
+    have half_pi_le_pi : π / 2 ≤ π := half_le_self_iff.mpr Real.pi_pos.le
+    have subset : Set.Ioc 0 (π/2) ⊆ Set.Ioc 0 π := Set.Ioc_subset_Ioc (le_refl 0) half_pi_le_pi
+    exact this θ (subset hθ)
+  simp_rw [intervalIntegral.integral_of_le (div_nonneg Real.pi_pos.le zero_le_two), set_integral_toReal_ofReal measurableSet_Ioc this]
+
+  -- return to interval integrals
+  simp_rw [
+    ← intervalIntegral.integral_of_le Real.pi_pos.le,
+    ← intervalIntegral.integral_of_le (div_nonneg Real.pi_pos.le zero_le_two)
+  ]
+
   rw [← intervalIntegral.integral_add_adjacent_intervals (b := π / 2) (c := π)]
   conv => lhs; arg 2; arg 1; intro θ; rw [← neg_neg θ, Real.sin_neg]
 
   simp_rw [
-    intervalIntegral.integral_comp_neg fun θ => ENNReal.toReal (ℙ (Set.Icc 0 (d / 2) ∩ Set.Icc 0 (-θ.sin * l / 2))),
+    intervalIntegral.integral_comp_neg fun θ => min (d / 2) (-θ.sin * l / 2),
     ← Real.sin_add_pi,
-    intervalIntegral.integral_comp_add_right (fun θ => ENNReal.toReal (ℙ (Set.Icc 0 (d / 2) ∩ Set.Icc 0 (θ.sin * l / 2)))),
+    intervalIntegral.integral_comp_add_right (fun θ => min (d / 2) (θ.sin * l / 2)),
     add_left_neg,
     (by ring : -(π/2) + π = π/2),
     two_mul,
   ]
 
-  sorry -- integrable
-  sorry -- integrable
+  all_goals
+    simp_rw [min_div_div_right zero_le_two d]
+    apply Continuous.intervalIntegrable
+    apply Continuous.div_const
+    apply Continuous.min continuous_const
+    apply Continuous.mul Real.continuous_sin continuous_const
 
 lemma interval_integral_to_arcsin :
     ∫ (θ : ℝ) in (0)..(d / l).arcsin, ENNReal.toReal (ℙ (Set.Icc 0 (d / 2) ∩ Set.Icc 0 (θ.sin * l / 2))) =
@@ -336,17 +364,21 @@ theorem buffon_long (h : l ≥ d) :
       (2 * l) * (d * π)⁻¹
       - (2 / (d * π)) * ((l^2 - d^2).sqrt + d * (d / l).arcsin)
       + 1 := by
+
   simp_rw [buffon_integral d l hd B hBₘ hB, MeasureTheory.integral_Icc_eq_integral_Ioc, MeasureTheory.integral_const,
     ←intervalIntegral.integral_of_le Real.pi_pos.le, smul_eq_mul, mul_one]
+
   simp only [MeasurableSet.univ, Measure.restrict_apply, Set.univ_inter, inter_eq_two_mul,
     ENNReal.toReal_mul, intervalIntegral.integral_const_mul, ENNReal.toReal_ofNat, integral_inter_eq_two_mul]
 
   have (c : ℝ) : (d * π)⁻¹ * (2 * (2 * c)) = 4 * (d * π)⁻¹ * c := by ring_nf
 
-  rw [this,
+  rw [
+    this,
     ← intervalIntegral.integral_add_adjacent_intervals (b := (d / l).arcsin),
     interval_integral_to_arcsin d l hd hl,
-    interval_integral_from_arcsin]
+    interval_integral_from_arcsin
+  ]
 
   simp only [intervalIntegral.integral_div, intervalIntegral.integral_mul_const, integral_sin,
     Real.cos_zero, Real.cos_arcsin, div_pow, intervalIntegral.integral_const, smul_eq_mul]
