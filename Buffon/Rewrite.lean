@@ -1,8 +1,67 @@
+/-
+Copyright (c) 2023 Enrico Z. Borba. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Enrico Z. Borba
+-/
+
 import Mathlib.Probability.Density
 import Mathlib.Probability.Notation
 import Mathlib.MeasureTheory.Measure.Lebesgue.Basic
 import Mathlib.MeasureTheory.Constructions.Prod.Integral
 import Mathlib.Analysis.SpecialFunctions.Integrals
+
+/-!
+
+# Freek № 99: Buffon's Needle
+
+This file proves Theorem 99 from the [100 Theorems List](https://www.cs.ru.nl/~freek/100/), also
+known as Buffon's Needle, which gives the probability of a needle of length `l > 0` crossing any
+one of infinite vertical lines spaced out `d > 0` apart.
+
+## Overview of the Proof
+We define a random variable `B : Ω → ℝ × ℝ` with a uniform distribution on `[-d/2, d/2] × [0, π]`.
+This represents the needle's x-position and angle with respect to a vertical line. By symmetry, we
+need to consider only a single verticalm line positioned at `x = 0`. A needle therefore crosses the
+vertical line if its projection onto the x-axis contains `0`.
+
+We define a random variable `N : Ω → ℝ` that is `1` if the needle crosses a vertical line, and `0`
+otherwise. This is defined as `fun ω => Set.indicator (needle_x_proj l (B ω).1 (B ω).2) 1 0`.
+
+As in many references, the problem is split into two cases, `l ≤ d` (`buffon_short`), and `l ≥ d`
+(`buffon_long`). For both cases, we show that
+```
+ℙ[N] = (d * π) ⁻¹ *
+    ∫ θ in 0..π,
+    ∫ x in Set.Icc (-d / 2) (d / 2) ∩ Set.Icc (-θ.sin * l / 2) (θ.sin * l / 2), 1
+```
+In the short case `l ≤ d`, we show that `[-l * θ.sin/2, l * θ.sin/2] ⊆ [-d/2, d/2]`
+(`short_needle_inter_eq`), and therefore the inner integral simplifies to
+```
+∫ x in (-θ.sin * l / 2)..(θ.sin * l / 2), 1 = θ.sin * l
+```
+Which then concludes in the short case being `ℙ[N] = (2 * l) / (d * π)`.
+
+In the long case, `d ≥ l` (`buffon_long`), we show the outer integral simplifies to
+```
+∫ θ in 0..π, min d (θ.sin * l)
+```
+which can be expanded to
+```
+2 * (∫ θ in 0..(d / l).arcsin, min d (θ.sin * l) + ∫ θ in (d / l).arcsin..(π/2), min d (θ.sin * l))
+```
+We then show the two integrals equal their respective values `l - (l^2 - d^2).sqrt` and
+`(π / 2 - (d / l).arcsin) * d`. Then with some algebra we conclude
+```
+ℙ[N] = (2 * l) / (d * π) - 2 / (d * π) * ((l^2 - d^2).sqrt + d * (d / l).arcsin) + 1
+```
+
+## References
+
+* https://en.wikipedia.org/wiki/Buffon%27s_needle_problem
+* https://www.isa-afp.org/entries/Buffons_Needle.html
+* https://www.math.leidenuniv.nl/~hfinkeln/seminarium/stelling_van_Buffon.pdf
+
+-/
 
 open MeasureTheory (MeasureSpace IsProbabilityMeasure pdf.IsUniform Measure)
 open ProbabilityTheory
@@ -12,24 +71,10 @@ lemma set_integral_toReal_ofReal_nonneg_ae [MeasureSpace α] {s : Set α} {f : �
     ∫ (x : α) in s, ENNReal.toReal (ENNReal.ofReal (f x)) =
     ∫ (x : α) in s, f x := by
 
-  have toReal_ofReal_eq_iff (r : ℝ) : r = ENNReal.toReal (ENNReal.ofReal r) ↔ r ≥ 0 := by
-    apply Iff.intro
-    · intro hr; rw [hr]; exact ENNReal.toReal_nonneg
-    · intro hr; exact (ENNReal.toReal_ofReal hr).symm
-
   have : ∀ᵐ x : α, x ∈ s → f x = ENNReal.toReal (ENNReal.ofReal (f x)) := by
-    simp_rw [toReal_ofReal_eq_iff]
-    exact hf
+    simp_rw [eq_comm (a := f _), ENNReal.toReal_ofReal_eq_iff, hf]
 
   rw [MeasureTheory.set_integral_congr_ae hs this]
-
-lemma sin_mul_le (l d θ : ℝ) (hl₁ : l ≥ 0) (hl₂ : l ≤ d) : θ.sin * l ≤ d := by
-  rw [mul_comm, ← mul_one d]
-  apply mul_le_mul_of_le_of_le hl₂ θ.sin_le_one hl₁ zero_le_one
-
-lemma neg_sin_mul_le (l d θ : ℝ) (hl₁ : l ≥ 0) (hl₂ : l ≤ d) : -(θ.sin * l) ≤ d := by
-  rw [mul_comm, ← mul_one d, mul_comm, ← neg_mul, mul_comm, ←Real.sin_neg]
-  apply mul_le_mul_of_le_of_le hl₂ (-θ).sin_le_one hl₁ zero_le_one
 
 notation "π" => Real.pi
 
@@ -48,10 +93,9 @@ variable
   (hl : l > 0)
 
   /-
-    `B = (X, Θ)` is the joint random variable for the x-position and angle of
-    the needle. If a line is at `x = 0`, by symmetry, `B` can be a uniform
-    random variable over `[-d/2, d/2] × [0, π]`, where `θ` is the angle of the
-    needle relative to the y-axis.
+    `B = (X, Θ)` is the joint random variable for the x-position and angle of the needle. If a line
+    is at `x = 0`, by symmetry, `B` can be a uniform random variable over `[-d/2, d/2] × [0, π]`,
+    where `θ` is the angle of the needle relative to the y-axis.
   -/
   (B : Ω → ℝ × ℝ)
   (hBₘ : Measurable B)
@@ -83,17 +127,9 @@ lemma short_needle_inter_eq (h : l ≤ d) (θ : ℝ) :
     Set.Icc (-d / 2) (d / 2) ∩ Set.Icc (-θ.sin * l / 2) (θ.sin * l / 2) =
     Set.Icc (-θ.sin * l / 2) (θ.sin * l / 2) := by
 
-  apply Set.inter_eq_self_of_subset_right
-  apply Set.Icc_subset
-  all_goals rw [Set.mem_Icc]
-
-  · apply And.intro <;> apply div_le_div_of_le (le_of_lt two_pos) <;> rw [neg_mul]
-    · exact neg_le_neg (sin_mul_le l d θ hl.le h)
-    · exact neg_sin_mul_le l d θ hl.le h
-
-  · apply And.intro <;> apply div_le_div_of_le (le_of_lt two_pos)
-    · exact neg_le.mpr (neg_sin_mul_le l d θ hl.le h)
-    · exact sin_mul_le l d θ hl.le h
+  rw [Set.Icc_inter_Icc, inf_eq_min, sup_eq_max, max_div_div_right zero_le_two,
+    min_div_div_right zero_le_two, neg_mul, max_neg_neg, mul_comm,
+    min_eq_right (mul_le_of_le_of_le_one_of_nonneg h θ.sin_le_one hl.le)]
 
 abbrev B_range := Set.Icc (-d / 2) (d / 2) ×ˢ Set.Icc 0 π
 
@@ -162,7 +198,9 @@ lemma N'_strongly_measurable : MeasureTheory.StronglyMeasurable (N' l) := by
 
 lemma N'_integrable_prod :
     MeasureTheory.Integrable (N' l)
-      (Measure.prod (Measure.restrict ℙ (Set.Icc (-d / 2) (d / 2))) (Measure.restrict ℙ (Set.Icc 0 π))) := by
+      (Measure.prod
+        (Measure.restrict ℙ (Set.Icc (-d / 2) (d / 2)))
+        (Measure.restrict ℙ (Set.Icc 0 π))) := by
 
   have N'_nonneg p : N' l p ≥ 0 := by
     apply Set.indicator_apply_nonneg
@@ -182,8 +220,10 @@ lemma N'_integrable_prod :
       intro p
       simp only [ENNReal.ofReal_le_one, Pi.one_apply]
       exact N'_le_one p
-    simp only [Pi.one_apply, MeasureTheory.lintegral_const, one_mul, MeasureTheory.Measure.prod_restrict]
-    rw [MeasureTheory.Measure.restrict_apply MeasurableSet.univ, Set.univ_inter, MeasureTheory.Measure.prod_prod]
+    simp only [Pi.one_apply, MeasureTheory.lintegral_const, one_mul,
+      MeasureTheory.Measure.prod_restrict]
+    rw [MeasureTheory.Measure.restrict_apply MeasurableSet.univ, Set.univ_inter,
+      MeasureTheory.Measure.prod_prod]
     simp_rw [Real.volume_Icc]
     ring_nf
     rw [← ENNReal.ofReal_mul hd.le]
@@ -196,7 +236,8 @@ lemma buffon_integral :
   simp_rw [N, Function.comp_apply]
 
   rw [
-    ← MeasureTheory.integral_map (f := N' l) hBₘ.aemeasurable (N'_strongly_measurable l).aestronglyMeasurable,
+    ← MeasureTheory.integral_map (f := N' l) hBₘ.aemeasurable
+      (N'_strongly_measurable l).aestronglyMeasurable,
     hB,
     MeasureTheory.integral_smul_measure,
     B_range_volume d hd,
@@ -244,7 +285,8 @@ lemma buffon_integral :
   simp_rw [indicator_eq, MeasureTheory.set_integral_indicator measurableSet_Icc, Pi.one_apply]
 
 /--
-  Buffon's Needle, the short case (`l ≤ d`). The probability of the needle crossing a line equals `(2 * l) / (d * π)`.
+  Buffon's Needle, the short case (`l ≤ d`). The probability of the needle crossing a line
+  equals `(2 * l) / (d * π)`.
 -/
 theorem buffon_short (h : l ≤ d) : ℙ[N l B] = (2 * l) * (d * π)⁻¹ := by
   simp_rw [
@@ -284,7 +326,8 @@ lemma min_sin_mul_continuous : Continuous (fun (θ : ℝ) => min d (θ.sin * l))
   apply Continuous.min continuous_const
   apply Continuous.mul Real.continuous_sin continuous_const
 
-lemma integral_min_eq_two_mul : ∫ θ in (0)..π, min d (θ.sin * l) = 2 * ∫ θ in (0)..π/2, min d (θ.sin * l) := by
+lemma integral_min_eq_two_mul :
+    ∫ θ in (0)..π, min d (θ.sin * l) = 2 * ∫ θ in (0)..π/2, min d (θ.sin * l) := by
   rw [← intervalIntegral.integral_add_adjacent_intervals (b := π / 2) (c := π)]
   conv => lhs; arg 2; arg 1; intro θ; rw [← neg_neg θ, Real.sin_neg]
 
@@ -302,10 +345,11 @@ lemma integral_min_eq_two_mul : ∫ θ in (0)..π, min d (θ.sin * l) = 2 * ∫ 
 
 lemma integral_zero_to_arcsin_min :
     ∫ θ in (0)..(d / l).arcsin, min d (θ.sin * l) = (1 - (1 - (d / l) ^ 2).sqrt) * l := by
-  have : Set.EqOn (fun θ => min d (θ.sin * l)) (fun θ => θ.sin * l) (Set.uIcc 0 (d / l).arcsin) := by
+  have : Set.EqOn (fun θ => min d (θ.sin * l)) (Real.sin · * l) (Set.uIcc 0 (d / l).arcsin) := by
     intro θ ⟨hθ₁, hθ₂⟩
     have arcsin_nonneg : (d / l).arcsin ≥ 0 := Real.arcsin_nonneg.mpr (div_nonneg hd.le hl.le)
-    simp only [sup_eq_max, inf_eq_min, min_eq_left arcsin_nonneg, max_eq_right arcsin_nonneg] at hθ₁ hθ₂
+    simp only [sup_eq_max, inf_eq_min, min_eq_left arcsin_nonneg,
+      max_eq_right arcsin_nonneg] at hθ₁ hθ₂
     have hθ_mem : θ ∈ Set.Ioc (-(π / 2)) (π / 2) := by
       apply And.intro
       · calc
@@ -356,8 +400,9 @@ theorem buffon_long (h : l ≥ d) :
   simp only [
     buffon_integral d l hd B hBₘ hB, MeasureTheory.integral_const, smul_eq_mul, mul_one,
     MeasurableSet.univ, Measure.restrict_apply, Set.univ_inter, Set.Icc_inter_Icc, Real.volume_Icc,
-    sup_eq_max, inf_eq_min, min_div_div_right zero_le_two d, max_div_div_right zero_le_two (-d), div_sub_div_same,
-    neg_mul, max_neg_neg, sub_neg_eq_add, ← mul_two, mul_div_cancel (min d (Real.sin _ * l)) two_ne_zero
+    sup_eq_max, inf_eq_min, min_div_div_right zero_le_two d, max_div_div_right zero_le_two (-d),
+    div_sub_div_same, neg_mul, max_neg_neg, sub_neg_eq_add, ← mul_two,
+    mul_div_cancel (min d (Real.sin _ * l)) two_ne_zero
   ]
 
   have (θ : ℝ) (hθ : θ ∈ Set.Icc 0 π) : min d (θ.sin * l) ≥ 0 := by
@@ -375,8 +420,8 @@ theorem buffon_long (h : l ≥ d) :
   ]
 
   have this₁ : (1 - Real.sqrt (1 - (d / l) ^ 2)) * l = l - (l ^ 2 - d ^ 2).sqrt := by
-    rw [mul_comm, mul_sub, mul_one, div_pow, one_sub_div, Real.sqrt_div, Real.sqrt_sq hl.le, ← mul_div_assoc, mul_comm,
-      mul_div_cancel _ (ne_of_gt hl)]
+    rw [mul_comm, mul_sub, mul_one, div_pow, one_sub_div, Real.sqrt_div, Real.sqrt_sq hl.le,
+      ← mul_div_assoc, mul_comm, mul_div_cancel _ (ne_of_gt hl)]
     · rw [sub_nonneg]
       apply sq_le_sq.mpr
       rw [abs_of_pos hd, abs_of_pos hl]
@@ -385,20 +430,19 @@ theorem buffon_long (h : l ≥ d) :
       exact (ne_of_gt hl)
 
   have this₂ : 2 * d * (π / 2 - (d / l).arcsin) / (d * π) = 1 - (2 / π) * (d / l).arcsin := by
-    rw [mul_sub, sub_div, mul_assoc, ← mul_comm_div, ← mul_assoc, ← mul_comm_div, div_self two_ne_zero, one_mul,
-      div_self (ne_of_gt (mul_pos hd Real.pi_pos)), mul_div_assoc, ← mul_comm_div, mul_comm 2,
-      mul_div_mul_left _ _ (ne_of_gt hd)]
+    rw [mul_sub, sub_div, mul_assoc, ← mul_comm_div, ← mul_assoc, ← mul_comm_div,
+      div_self two_ne_zero, one_mul, div_self (ne_of_gt (mul_pos hd Real.pi_pos)), mul_div_assoc,
+      ← mul_comm_div, mul_comm 2, mul_div_mul_left _ _ (ne_of_gt hd)]
 
-  have this₃ : 2 * Real.sqrt (l ^ 2 - d ^ 2) / (d * π) = 2 / (d * π) * Real.sqrt (l ^ 2 - d ^ 2) := by ring_nf
-
+  have this₃ : 2 * Real.sqrt (l^2 - d^2) / (d * π) = 2 / (d * π) * (l^2 - d^2).sqrt := by ring_nf
   have this₄ : 2 / π * d / d = 2 / (d * π) * d := by ring_nf
 
   conv =>
     lhs
-    rw [this₁, inv_mul_eq_div, mul_add, mul_sub, add_div, sub_div, mul_comm (π / 2 - (d / l).arcsin), ← mul_assoc,
-      this₂, this₃, add_sub, add_sub_right_comm, sub_eq_add_neg, sub_eq_add_neg, ← neg_mul,
-      ← mul_div_cancel (2 / π) (ne_of_gt hd), this₄, mul_assoc, ← neg_mul, add_assoc (2 * l / (d * π)) _ _,
-      ← mul_add, neg_mul, ← sub_eq_add_neg]
+    rw [this₁, inv_mul_eq_div, mul_add, mul_sub, add_div, sub_div,
+      mul_comm (π / 2 - (d / l).arcsin), ← mul_assoc, this₂, this₃, add_sub, add_sub_right_comm,
+      sub_eq_add_neg, sub_eq_add_neg, ← neg_mul, ← mul_div_cancel (2 / π) (ne_of_gt hd), this₄,
+      mul_assoc, ← neg_mul, add_assoc (2 * l / (d * π)) _ _, ← mul_add, neg_mul, ← sub_eq_add_neg]
 
   all_goals
     exact Continuous.intervalIntegrable (min_sin_mul_continuous d l) _ _
