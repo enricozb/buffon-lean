@@ -299,7 +299,6 @@ lemma integral_min_eq_two_mul : ∫ θ in (0)..π, min d (θ.sin * l) = 2 * ∫ 
   all_goals
     exact Continuous.intervalIntegrable (min_sin_mul_continuous d l) _ _
 
-
 lemma integral_zero_to_arcsin_min :
     ∫ θ in (0)..(d / l).arcsin, min d (θ.sin * l) = (1 - (1 - (d / l) ^ 2).sqrt) * l := by
   have : Set.EqOn (fun θ => min d (θ.sin * l)) (fun θ => θ.sin * l) (Set.uIcc 0 (d / l).arcsin) := by
