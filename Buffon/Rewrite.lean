@@ -1,12 +1,11 @@
 /-
-Copyright (c) 2023 Enrico Z. Borba. All rights reserved.
+Copyright (c) 2024 Enrico Z. Borba. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Enrico Z. Borba
 -/
 
 import Mathlib.Probability.Density
 import Mathlib.Probability.Notation
-import Mathlib.MeasureTheory.Measure.Lebesgue.Basic
 import Mathlib.MeasureTheory.Constructions.Prod.Integral
 import Mathlib.Analysis.SpecialFunctions.Integrals
 
@@ -18,7 +17,10 @@ This file proves Theorem 99 from the [100 Theorems List](https://www.cs.ru.nl/~f
 known as Buffon's Needle, which gives the probability of a needle of length `l > 0` crossing any
 one of infinite vertical lines spaced out `d > 0` apart.
 
+The two cases are proven in `buffon_short` and `buffon_long`.
+
 ## Overview of the Proof
+
 We define a random variable `B : Ω → ℝ × ℝ` with a uniform distribution on `[-d/2, d/2] × [0, π]`.
 This represents the needle's x-position and angle with respect to a vertical line. By symmetry, we
 need to consider only a single verticalm line positioned at `x = 0`. A needle therefore crosses the
@@ -58,8 +60,8 @@ We then show the two integrals equal their respective values `l - (l^2 - d^2).sq
 ## References
 
 * https://en.wikipedia.org/wiki/Buffon%27s_needle_problem
-* https://www.isa-afp.org/entries/Buffons_Needle.html
 * https://www.math.leidenuniv.nl/~hfinkeln/seminarium/stelling_van_Buffon.pdf
+* https://www.isa-afp.org/entries/Buffons_Needle.html
 
 -/
 
