@@ -7,20 +7,21 @@ import Mathlib.Analysis.SpecialFunctions.Integrals
 open MeasureTheory (MeasureSpace IsProbabilityMeasure pdf.IsUniform Measure)
 open ProbabilityTheory
 
-lemma set_integral_toReal_ofReal [MeasureSpace α] {s : Set α} {f : α → ℝ}
-    (hs : MeasurableSet s) (hf : ∀ x ∈ s, f x ≥ 0) :
+lemma set_integral_toReal_ofReal_nonneg_ae [MeasureSpace α] {s : Set α} {f : α → ℝ}
+    (hs : MeasurableSet s) (hf : ∀ᵐ x : α, x ∈ s → f x ≥ 0) :
     ∫ (x : α) in s, ENNReal.toReal (ENNReal.ofReal (f x)) =
     ∫ (x : α) in s, f x := by
 
-  have comp_eq : (fun x => ENNReal.toReal (ENNReal.ofReal (f x))) = (ENNReal.toReal ∘ ENNReal.ofReal ∘ f) := by rfl
-  simp_rw [comp_eq]
+  have toReal_ofReal_eq_iff (r : ℝ) : r = ENNReal.toReal (ENNReal.ofReal r) ↔ r ≥ 0 := by
+    apply Iff.intro
+    · intro hr; rw [hr]; exact ENNReal.toReal_nonneg
+    · intro hr; exact (ENNReal.toReal_ofReal hr).symm
 
-  have eq_on : Set.EqOn (ENNReal.toReal ∘ ENNReal.ofReal ∘ f) f s := by
-    intro x hx
-    simp only [Function.comp_apply, ENNReal.toReal_ofReal_eq_iff]
-    exact hf x hx
+  have : ∀ᵐ x : α, x ∈ s → f x = ENNReal.toReal (ENNReal.ofReal (f x)) := by
+    simp_rw [toReal_ofReal_eq_iff]
+    exact hf
 
-  rw [MeasureTheory.set_integral_congr hs eq_on]
+  rw [MeasureTheory.set_integral_congr_ae hs this]
 
 lemma sin_mul_le (l d θ : ℝ) (hl₁ : l ≥ 0) (hl₂ : l ≤ d) : θ.sin * l ≤ d := by
   rw [mul_comm, ← mul_one d]
@@ -263,7 +264,7 @@ theorem buffon_short (h : l ≤ d) : ℙ[N l B] = (2 * l) * (d * π)⁻¹ := by
     intro θ hθ
     exact mul_nonneg (Real.sin_nonneg_of_mem_Icc hθ) hl.le
 
-  rw [set_integral_toReal_ofReal measurableSet_Icc this]
+  rw [set_integral_toReal_ofReal_nonneg_ae measurableSet_Icc (MeasureTheory.ae_of_all _ this)]
 
   conv in (_ * l) => rw [← smul_eq_mul]
   simp_rw [integral_smul_const, smul_eq_mul, mul_comm, mul_eq_mul_left_iff]
@@ -364,11 +365,14 @@ theorem buffon_long (h : l ≥ d) :
     · rw [min_eq_left h]; exact hd.le
     · rw [min_eq_right (not_le.mp h).le]; exact mul_nonneg (Real.sin_nonneg_of_mem_Icc hθ) hl.le
 
-  rw [set_integral_toReal_ofReal measurableSet_Icc this, MeasureTheory.integral_Icc_eq_integral_Ioc,
+  rw [
+    set_integral_toReal_ofReal_nonneg_ae measurableSet_Icc (MeasureTheory.ae_of_all _ this),
+    MeasureTheory.integral_Icc_eq_integral_Ioc,
     ← intervalIntegral.integral_of_le Real.pi_pos.le, integral_min_eq_two_mul,
     ← intervalIntegral.integral_add_adjacent_intervals (b := (d / l).arcsin),
     integral_zero_to_arcsin_min d l hd hl,
-    integral_arcsin_to_pi_div_two_min d l hd hl h]
+    integral_arcsin_to_pi_div_two_min d l hd hl h
+  ]
 
   have this₁ : (1 - Real.sqrt (1 - (d / l) ^ 2)) * l = l - (l ^ 2 - d ^ 2).sqrt := by
     rw [mul_comm, mul_sub, mul_one, div_pow, one_sub_div, Real.sqrt_div, Real.sqrt_sq hl.le, ← mul_div_assoc, mul_comm,
