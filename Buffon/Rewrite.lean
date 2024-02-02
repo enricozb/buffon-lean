@@ -242,7 +242,10 @@ lemma buffon_integral :
 
   simp_rw [indicator_eq, MeasureTheory.set_integral_indicator measurableSet_Icc, Pi.one_apply]
 
-theorem buffon_short (h : l ≤ d) : 𝔼[N l B] = (2 * l) * (d * π)⁻¹ := by
+/--
+  Buffon's Needle, the short case (`l ≤ d`). The probability of the needle crossing a line equals `(2 * l) / (d * π)`.
+-/
+theorem buffon_short (h : l ≤ d) : ℙ[N l B] = (2 * l) * (d * π)⁻¹ := by
   simp_rw [
     buffon_integral d l hd B hBₘ hB,
     short_needle_inter_eq d l hl h _,
@@ -276,122 +279,123 @@ theorem buffon_short (h : l ≤ d) : 𝔼[N l B] = (2 * l) * (d * π)⁻¹ := by
 
   ring_nf
 
-lemma inter_eq_two_mul (d l θ : ℝ) :
-    ℙ (Set.Icc (-d / 2) (d / 2) ∩ Set.Icc (-θ.sin * l / 2) (θ.sin * l / 2)) =
-    2 * ℙ (Set.Icc 0 (d / 2) ∩ Set.Icc 0 (θ.sin * l / 2)) := by
+lemma min_sin_mul_continuous : Continuous (fun (θ : ℝ) => min d (θ.sin * l)) := by
+  apply Continuous.min continuous_const
+  apply Continuous.mul Real.continuous_sin continuous_const
 
-    simp_rw [Set.Icc_inter_Icc, sup_eq_max, inf_eq_min, max_self]
-    rw [max_div_div_right two_pos.le, min_div_div_right two_pos.le, neg_mul, max_neg_neg]
-
-    by_cases h : θ.sin * l ≤ d
-    case' pos => have : min d (θ.sin * l) = θ.sin * l := min_eq_right h
-    case' neg => have : min d (θ.sin * l) = d := min_eq_left (not_le.mp h).le
-    all_goals
-      simp_rw [this, Real.volume_Icc]
-      rw [← ENNReal.ofReal_ofNat, ← ENNReal.ofReal_mul zero_le_two]
-      ring_nf
-
-lemma integral_inter_eq_two_mul :
-    ∫ (θ : ℝ) in (0)..π, ENNReal.toReal (ℙ (Set.Icc 0 (d / 2) ∩ Set.Icc 0 (θ.sin * l / 2))) =
-    2 * ∫ (θ : ℝ) in (0)..(π / 2), ENNReal.toReal (ℙ (Set.Icc 0 (d / 2) ∩ Set.Icc 0 (θ.sin * l / 2))) := by
-
-  simp_rw [Set.Icc_inter_Icc, sup_eq_max, inf_eq_min, max_self, Real.volume_Icc, sub_zero]
-
-  -- lhs
-  have (θ : ℝ) (hθ : θ ∈ Set.Ioc 0 π) : min (d / 2) (Real.sin θ * l / 2) ≥ 0 := by
-    rw [min_div_div_right zero_le_two d]
-    apply div_nonneg _ zero_le_two
-    by_cases h : d ≤ θ.sin * l
-    · rw [min_eq_left h]; exact hd.le
-    · rw [min_eq_right (not_le.mp h).le]; exact mul_nonneg (Real.sin_nonneg_of_mem_Icc (Set.mem_Icc_of_Ioc hθ)) hl.le
-  simp_rw [intervalIntegral.integral_of_le Real.pi_pos.le, set_integral_toReal_ofReal measurableSet_Ioc this]
-
-  -- rhs
-  have (θ : ℝ) (hθ : θ ∈ Set.Ioc 0 (π/2)) : min (d / 2) (Real.sin θ * l / 2) ≥ 0 := by
-    have half_pi_le_pi : π / 2 ≤ π := half_le_self_iff.mpr Real.pi_pos.le
-    have subset : Set.Ioc 0 (π/2) ⊆ Set.Ioc 0 π := Set.Ioc_subset_Ioc (le_refl 0) half_pi_le_pi
-    exact this θ (subset hθ)
-  simp_rw [intervalIntegral.integral_of_le (div_nonneg Real.pi_pos.le zero_le_two), set_integral_toReal_ofReal measurableSet_Ioc this]
-
-  -- return to interval integrals
-  simp_rw [
-    ← intervalIntegral.integral_of_le Real.pi_pos.le,
-    ← intervalIntegral.integral_of_le (div_nonneg Real.pi_pos.le zero_le_two)
-  ]
-
+lemma integral_min_eq_two_mul : ∫ θ in (0)..π, min d (θ.sin * l) = 2 * ∫ θ in (0)..π/2, min d (θ.sin * l) := by
   rw [← intervalIntegral.integral_add_adjacent_intervals (b := π / 2) (c := π)]
   conv => lhs; arg 2; arg 1; intro θ; rw [← neg_neg θ, Real.sin_neg]
 
   simp_rw [
-    intervalIntegral.integral_comp_neg fun θ => min (d / 2) (-θ.sin * l / 2),
+    intervalIntegral.integral_comp_neg fun θ => min d (-θ.sin * l),
     ← Real.sin_add_pi,
-    intervalIntegral.integral_comp_add_right (fun θ => min (d / 2) (θ.sin * l / 2)),
+    intervalIntegral.integral_comp_add_right (fun θ => min d (θ.sin * l)),
     add_left_neg,
     (by ring : -(π/2) + π = π/2),
     two_mul,
   ]
 
   all_goals
-    simp_rw [min_div_div_right zero_le_two d]
-    apply Continuous.intervalIntegrable
-    apply Continuous.div_const
-    apply Continuous.min continuous_const
-    apply Continuous.mul Real.continuous_sin continuous_const
+    exact Continuous.intervalIntegrable (min_sin_mul_continuous d l) _ _
 
-lemma interval_integral_to_arcsin :
-    ∫ (θ : ℝ) in (0)..(d / l).arcsin, ENNReal.toReal (ℙ (Set.Icc 0 (d / 2) ∩ Set.Icc 0 (θ.sin * l / 2))) =
-    ∫ (θ : ℝ) in (0)..(d / l).arcsin, θ.sin * l / 2 := by
 
-  apply intervalIntegral.integral_congr
+lemma integral_zero_to_arcsin_min :
+    ∫ θ in (0)..(d / l).arcsin, min d (θ.sin * l) = (1 - (1 - (d / l) ^ 2).sqrt) * l := by
+  have : Set.EqOn (fun θ => min d (θ.sin * l)) (fun θ => θ.sin * l) (Set.uIcc 0 (d / l).arcsin) := by
+    intro θ ⟨hθ₁, hθ₂⟩
+    have arcsin_nonneg : (d / l).arcsin ≥ 0 := Real.arcsin_nonneg.mpr (div_nonneg hd.le hl.le)
+    simp only [sup_eq_max, inf_eq_min, min_eq_left arcsin_nonneg, max_eq_right arcsin_nonneg] at hθ₁ hθ₂
+    have hθ_mem : θ ∈ Set.Ioc (-(π / 2)) (π / 2) := by
+      apply And.intro
+      · calc
+        -(π / 2) < 0 := neg_lt_zero.mpr (div_pos Real.pi_pos two_pos)
+        _        ≤ θ := hθ₁
+      · calc
+        θ ≤ (d / l).arcsin := hθ₂
+        _ ≤ π / 2 := (d / l).arcsin_mem_Icc.right
 
-  intro θ ⟨hθ₁, hθ₂⟩
-  rw [inf_eq_min, min_eq_left (Real.arcsin_nonneg.mpr (div_pos hd hl).le)] at hθ₁
-  rw [sup_eq_max, max_eq_right (Real.arcsin_nonneg.mpr (div_pos hd hl).le), Real.le_arcsin_iff_sin_le' ?hθ, le_div_iff hl] at hθ₂
-  case hθ => sorry
+    have : θ.sin * l ≤ d := (le_div_iff hl).mp ((Real.le_arcsin_iff_sin_le' hθ_mem).mp hθ₂)
+    simp_rw [min_eq_right this]
 
-  simp_rw [Set.Icc_inter_Icc, sup_eq_max, inf_eq_min, max_self]
-  rw [min_div_div_right two_pos.le, min_eq_right, Real.volume_Icc, ENNReal.toReal_ofReal]
-  ring_nf
-  · sorry -- 0 ≤ Real.sin θ * l / 2 - 0
-  · exact hθ₂
+  rw [intervalIntegral.integral_congr this, intervalIntegral.integral_mul_const, integral_sin,
+    Real.cos_zero, Real.cos_arcsin]
 
-lemma interval_integral_from_arcsin :
-    ∫ (θ : ℝ) in (d / l).arcsin..(π/2), ENNReal.toReal (ℙ (Set.Icc 0 (d / 2) ∩ Set.Icc 0 (θ.sin * l / 2))) =
-    ∫ (θ : ℝ) in (d / l).arcsin..(π/2), d / 2 := by sorry
+lemma integral_arcsin_to_pi_div_two_min (h : l ≥ d) :
+    ∫ θ in (d / l).arcsin..(π / 2), min d (θ.sin * l) = (π / 2 - (d / l).arcsin) * d := by
 
+  have : Set.EqOn (fun θ => min d (θ.sin * l)) (fun _ => d) (Set.uIcc (d / l).arcsin (π / 2)) := by
+    intro θ ⟨hθ₁, hθ₂⟩
+
+    wlog hθ_ne_pi_div_two : θ ≠ π / 2
+    · simp only [ne_eq, not_not] at hθ_ne_pi_div_two
+      simp only [hθ_ne_pi_div_two, Real.sin_pi_div_two, one_mul, min_eq_left h]
+
+    simp only [sup_eq_max, inf_eq_min, min_eq_left (d / l).arcsin_le_pi_div_two,
+      max_eq_right (d / l).arcsin_le_pi_div_two] at hθ₁ hθ₂
+
+    have hθ_mem : θ ∈ Set.Ico (-(π / 2)) (π / 2) := by
+      apply And.intro
+      · calc
+        -(π / 2) ≤ 0 := neg_nonpos.mpr (div_nonneg Real.pi_pos.le zero_le_two)
+        _        ≤ (d / l).arcsin := (Real.arcsin_pos.mpr (div_pos hd hl)).le
+        _        ≤ θ := hθ₁
+      · exact lt_of_le_of_ne hθ₂ hθ_ne_pi_div_two
+
+    have : d ≤ θ.sin * l := (div_le_iff hl).mp ((Real.arcsin_le_iff_le_sin' hθ_mem).mp hθ₁)
+    simp_rw [min_eq_left this]
+
+  rw [intervalIntegral.integral_congr this, intervalIntegral.integral_const, smul_eq_mul]
+
+/--
+  Buffon's Needle, the short case (`l ≥ d`).
+-/
 theorem buffon_long (h : l ≥ d) :
-    𝔼[N l B] =
-      (2 * l) * (d * π)⁻¹
-      - (2 / (d * π)) * ((l^2 - d^2).sqrt + d * (d / l).arcsin)
-      + 1 := by
+    ℙ[N l B] = (2 * l) / (d * π) - 2 / (d * π) * ((l^2 - d^2).sqrt + d * (d / l).arcsin) + 1 := by
 
-  simp_rw [buffon_integral d l hd B hBₘ hB, MeasureTheory.integral_Icc_eq_integral_Ioc, MeasureTheory.integral_const,
-    ←intervalIntegral.integral_of_le Real.pi_pos.le, smul_eq_mul, mul_one]
-
-  simp only [MeasurableSet.univ, Measure.restrict_apply, Set.univ_inter, inter_eq_two_mul,
-    ENNReal.toReal_mul, intervalIntegral.integral_const_mul, ENNReal.toReal_ofNat, integral_inter_eq_two_mul]
-
-  have (c : ℝ) : (d * π)⁻¹ * (2 * (2 * c)) = 4 * (d * π)⁻¹ * c := by ring_nf
-
-  rw [
-    this,
-    ← intervalIntegral.integral_add_adjacent_intervals (b := (d / l).arcsin),
-    interval_integral_to_arcsin d l hd hl,
-    interval_integral_from_arcsin
+  simp only [
+    buffon_integral d l hd B hBₘ hB, MeasureTheory.integral_const, smul_eq_mul, mul_one,
+    MeasurableSet.univ, Measure.restrict_apply, Set.univ_inter, Set.Icc_inter_Icc, Real.volume_Icc,
+    sup_eq_max, inf_eq_min, min_div_div_right zero_le_two d, max_div_div_right zero_le_two (-d), div_sub_div_same,
+    neg_mul, max_neg_neg, sub_neg_eq_add, ← mul_two, mul_div_cancel (min d (Real.sin _ * l)) two_ne_zero
   ]
 
-  simp only [intervalIntegral.integral_div, intervalIntegral.integral_mul_const, integral_sin,
-    Real.cos_zero, Real.cos_arcsin, div_pow, intervalIntegral.integral_const, smul_eq_mul]
+  have (θ : ℝ) (hθ : θ ∈ Set.Icc 0 π) : min d (θ.sin * l) ≥ 0 := by
+    by_cases h : d ≤ θ.sin * l
+    · rw [min_eq_left h]; exact hd.le
+    · rw [min_eq_right (not_le.mp h).le]; exact mul_nonneg (Real.sin_nonneg_of_mem_Icc hθ) hl.le
 
-  /-
-  4 * (d * π)⁻¹ * ((1 - Real.sqrt (1 - d ^ 2 / l ^ 2)) * l / 2 + (π / 2 - Real.arcsin (d / l)) * d / 2) =
-  2 * l * (π⁻¹ * d⁻¹) - 2 / (d * π) * (Real.sqrt (l ^ 2 - d ^ 2) + d * Real.arcsin (d / l)) + 1
-  -/
+  rw [set_integral_toReal_ofReal measurableSet_Icc this, MeasureTheory.integral_Icc_eq_integral_Ioc,
+    ← intervalIntegral.integral_of_le Real.pi_pos.le, integral_min_eq_two_mul,
+    ← intervalIntegral.integral_add_adjacent_intervals (b := (d / l).arcsin),
+    integral_zero_to_arcsin_min d l hd hl,
+    integral_arcsin_to_pi_div_two_min d l hd hl h]
 
-  simp_rw [← div_eq_mul_inv]
+  have this₁ : (1 - Real.sqrt (1 - (d / l) ^ 2)) * l = l - (l ^ 2 - d ^ 2).sqrt := by
+    rw [mul_comm, mul_sub, mul_one, div_pow, one_sub_div, Real.sqrt_div, Real.sqrt_sq hl.le, ← mul_div_assoc, mul_comm,
+      mul_div_cancel _ (ne_of_gt hl)]
+    · rw [sub_nonneg]
+      apply sq_le_sq.mpr
+      rw [abs_of_pos hd, abs_of_pos hl]
+      exact h
+    · simp only [ne_eq, zero_lt_two, pow_eq_zero_iff]
+      exact (ne_of_gt hl)
 
-  sorry -- algebra
+  have this₂ : 2 * d * (π / 2 - (d / l).arcsin) / (d * π) = 1 - (2 / π) * (d / l).arcsin := by
+    rw [mul_sub, sub_div, mul_assoc, ← mul_comm_div, ← mul_assoc, ← mul_comm_div, div_self two_ne_zero, one_mul,
+      div_self (ne_of_gt (mul_pos hd Real.pi_pos)), mul_div_assoc, ← mul_comm_div, mul_comm 2,
+      mul_div_mul_left _ _ (ne_of_gt hd)]
 
-  sorry -- IntervalIntegrable (fun x => ENNReal.toReal (↑↑ℙ (Set.Icc 0 (d / 2) ∩ Set.Icc 0 (Real.sin x * l / 2)))) ℙ 0 (Real.arcsin (d / l))
-  sorry -- IntervalIntegrable (fun x => ENNReal.toReal (↑↑ℙ (Set.Icc 0 (d / 2) ∩ Set.Icc 0 (Real.sin x * l / 2)))) ℙ (Real.arcsin (d / l)) (π / 2)
+  have this₃ : 2 * Real.sqrt (l ^ 2 - d ^ 2) / (d * π) = 2 / (d * π) * Real.sqrt (l ^ 2 - d ^ 2) := by ring_nf
 
+  have this₄ : 2 / π * d / d = 2 / (d * π) * d := by ring_nf
+
+  conv =>
+    lhs
+    rw [this₁, inv_mul_eq_div, mul_add, mul_sub, add_div, sub_div, mul_comm (π / 2 - (d / l).arcsin), ← mul_assoc,
+      this₂, this₃, add_sub, add_sub_right_comm, sub_eq_add_neg, sub_eq_add_neg, ← neg_mul,
+      ← mul_div_cancel (2 / π) (ne_of_gt hd), this₄, mul_assoc, ← neg_mul, add_assoc (2 * l / (d * π)) _ _,
+      ← mul_add, neg_mul, ← sub_eq_add_neg]
+
+  all_goals
+    exact Continuous.intervalIntegrable (min_sin_mul_continuous d l) _ _
