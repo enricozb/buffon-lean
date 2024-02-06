@@ -65,6 +65,7 @@ We then show the two integrals equal their respective values `l - (l^2 - d^2).sq
 
 -/
 
+open Real
 open MeasureTheory (MeasureSpace IsProbabilityMeasure pdf.IsUniform Measure)
 open ProbabilityTheory
 
@@ -77,8 +78,6 @@ lemma set_integral_toReal_ofReal_nonneg_ae [MeasureSpace α] {s : Set α} {f : �
     simp_rw [eq_comm (a := f _), ENNReal.toReal_ofReal_eq_iff, hf]
 
   rw [MeasureTheory.set_integral_congr_ae hs this]
-
-notation "π" => Real.pi
 
 variable
   /- Probability theory variables. -/
@@ -141,8 +140,7 @@ lemma B_range_volume : ℙ (B_range d) = ENNReal.ofReal (d * π) := by
   exact (ENNReal.ofReal_mul hd.le).symm
 
 lemma B_range_nonzero : ℙ (B_range d) ≠ 0 := by
-  rw [B_range_volume d hd, ne_eq, ENNReal.ofReal_eq_zero, not_le]
-  exact mul_pos hd Real.pi_pos
+  simp_rw [B_range_volume d hd, ne_eq, ENNReal.ofReal_eq_zero, not_le, mul_pos hd Real.pi_pos]
 
 lemma B_range_nontop : ℙ (B_range d) ≠ ⊤ := by
   rw [B_range_volume d hd]
@@ -157,46 +155,31 @@ instance instBHasPDF : MeasureTheory.HasPDF B ℙ :=
 
 lemma N'_measurable : Measurable (N' l) := by
   unfold N'
+  refine' Measurable.indicator measurable_const (IsClosed.measurableSet (IsClosed.inter ?l ?r))
 
-  apply Measurable.indicator measurable_const
-  apply IsClosed.measurableSet
-  apply IsClosed.inter
-
-  case' h.h₁ =>
-    simp only [tsub_le_iff_right, zero_add]
-    apply isClosed_le continuous_fst _
-  case' h.h₂ =>
-    simp only [← neg_le_iff_add_nonneg']
-    apply isClosed_le _ _
-
-  · conv => arg 1; intro p; rw [← mul_one p.1, ← mul_neg]
-    exact Continuous.mul continuous_fst continuous_const
+  all_goals simp only [tsub_le_iff_right, zero_add, ← neg_le_iff_add_nonneg']
+  case' l => refine' isClosed_le continuous_fst _
+  case' r => refine' isClosed_le (Continuous.neg continuous_fst) _
 
   all_goals
-  · simp_rw [mul_div_assoc]
-    apply Continuous.mul _ continuous_const
-    have : (fun (x : ℝ × ℝ) => Real.sin x.2) = Real.sin ∘ Prod.snd := by rfl
-    rw [this]
-    apply Continuous.comp Real.continuous_sin continuous_snd
+    refine' Continuous.mul (Continuous.mul _ continuous_const) continuous_const
+    simp_rw [← Function.comp_apply (f := Real.sin) (g := Prod.snd),
+      Continuous.comp Real.continuous_sin continuous_snd]
 
 lemma N'_strongly_measurable : MeasureTheory.StronglyMeasurable (N' l) := by
-  apply stronglyMeasurable_iff_measurable_separable.mpr
-  apply And.intro
-  · exact N'_measurable l
-  · apply Exists.intro {0, 1}
-    have range_finite : Set.Finite ({0, 1} : Set ℝ) := by
-      simp only [Set.mem_singleton_iff, Set.finite_singleton, Set.Finite.insert]
-    apply And.intro
-    · exact Set.Finite.countable range_finite
-    · rw [IsClosed.closure_eq (Set.Finite.isClosed range_finite)]
-      unfold N' Set.range
-      rw [Set.subset_def]
-      intro x ⟨p, hxp⟩
-      by_cases hp : 0 ∈ needle_x_proj l p.1 p.2
-      · simp_rw [Set.indicator_of_mem hp, Pi.one_apply] at hxp
-        apply Or.inr hxp.symm
-      · simp_rw [Set.indicator_of_not_mem hp] at hxp
-        apply Or.inl hxp.symm
+  refine' stronglyMeasurable_iff_measurable_separable.mpr ⟨N'_measurable l, {0, 1}, ?seperable⟩
+
+  have range_finite : Set.Finite ({0, 1} : Set ℝ) := by
+    simp only [Set.mem_singleton_iff, Set.finite_singleton, Set.Finite.insert]
+  refine' ⟨range_finite.countable, ?subset_closure⟩
+  rw [IsClosed.closure_eq range_finite.isClosed, Set.subset_def, Set.range]
+
+  intro x ⟨p, hxp⟩
+  by_cases hp : 0 ∈ needle_x_proj l p.1 p.2
+  · simp_rw [N', Set.indicator_of_mem hp, Pi.one_apply] at hxp
+    apply Or.inr hxp.symm
+  · simp_rw [N', Set.indicator_of_not_mem hp] at hxp
+    apply Or.inl hxp.symm
 
 lemma N'_integrable_prod :
     MeasureTheory.Integrable (N' l)
@@ -214,22 +197,21 @@ lemma N'_integrable_prod :
     · simp_rw [Set.indicator_of_mem hp, Pi.one_apply, le_refl]
     · simp_rw [Set.indicator_of_not_mem hp, zero_le_one]
 
-  apply And.intro (N'_strongly_measurable l).aestronglyMeasurable
-  · apply (MeasureTheory.hasFiniteIntegral_iff_norm (N' l)).mpr
-    apply lt_of_le_of_lt
-    apply MeasureTheory.lintegral_mono (g := 1)
-    · simp only [Real.norm_eq_abs, abs_of_nonneg (N'_nonneg _)]
-      intro p
-      simp only [ENNReal.ofReal_le_one, Pi.one_apply]
-      exact N'_le_one p
-    simp only [Pi.one_apply, MeasureTheory.lintegral_const, one_mul,
-      MeasureTheory.Measure.prod_restrict]
-    rw [MeasureTheory.Measure.restrict_apply MeasurableSet.univ, Set.univ_inter,
-      MeasureTheory.Measure.prod_prod]
-    simp_rw [Real.volume_Icc]
+  refine' And.intro
+    (N'_strongly_measurable l).aestronglyMeasurable
+    ((MeasureTheory.hasFiniteIntegral_iff_norm (N' l)).mpr _)
+  refine' lt_of_le_of_lt (MeasureTheory.lintegral_mono (g := 1) ?le_const) ?lt_top
+
+  case le_const =>
+    intro p
+    simp only [Real.norm_eq_abs, abs_of_nonneg (N'_nonneg _), ENNReal.ofReal_le_one, Pi.one_apply]
+    exact N'_le_one p
+
+  case lt_top =>
+    simp only [Pi.one_apply, MeasureTheory.lintegral_const, one_mul, Measure.prod_restrict,
+      Measure.restrict_apply MeasurableSet.univ, Set.univ_inter, Measure.prod_prod, Real.volume_Icc]
     ring_nf
-    rw [← ENNReal.ofReal_mul hd.le]
-    exact ENNReal.ofReal_lt_top
+    simp_rw [← ENNReal.ofReal_mul hd.le, ENNReal.ofReal_lt_top]
 
 lemma buffon_integral :
     𝔼[N l B] = (d * π) ⁻¹ *
@@ -240,9 +222,7 @@ lemma buffon_integral :
   rw [
     ← MeasureTheory.integral_map (f := N' l) hBₘ.aemeasurable
       (N'_strongly_measurable l).aestronglyMeasurable,
-    hB,
-    MeasureTheory.integral_smul_measure,
-    B_range_volume d hd,
+    hB, MeasureTheory.integral_smul_measure, B_range_volume d hd,
     ENNReal.ofReal_inv_of_pos (mul_pos hd Real.pi_pos),
     ENNReal.toReal_ofReal (inv_nonneg.mpr (mul_nonneg hd.le Real.pi_pos.le)),
     smul_eq_mul, mul_eq_mul_left_iff
